@@ -1,0 +1,27 @@
+# Node.js
+node_modules/
+server/dist/
+server/node_modules/
+*.log
+npm-debug.log*
+
+# Nix
+result
+result-*
+
+# Editor
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tsbuildinfo
+
+# Claude Code
+.claude/
