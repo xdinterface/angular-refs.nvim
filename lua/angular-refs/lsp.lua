@@ -11,26 +11,27 @@ local M = {}
 ---@param line number 0-indexed line number
 ---@param col number 0-indexed column number
 ---@param callback fun(refs: LspReference[])
-function M.get_references(bufnr, line, col, callback)
+---@param local_only boolean|nil If true, only return refs from the same file (for lifecycle methods)
+function M.get_references(bufnr, line, col, callback, local_only)
   local params = {
     textDocument = vim.lsp.util.make_text_document_params(bufnr),
     position = { line = line, character = col },
     context = { includeDeclaration = false },
   }
 
-  -- Get all LSP clients attached to this buffer that support references
-  local clients = vim.lsp.get_clients({ bufnr = bufnr })
+  -- Get TypeScript LSP client
+  local server = require("angular-refs.server")
   local ts_client = nil
 
-  for _, client in ipairs(clients) do
-    if client.name == "typescript-tools" or client.name == "ts_ls" or client.name == "vtsls" then
-      ts_client = client
+  for _, name in ipairs(server.TS_CLIENT_NAMES) do
+    local clients = vim.lsp.get_clients({ bufnr = bufnr, name = name })
+    if #clients > 0 then
+      ts_client = clients[1]
       break
     end
   end
 
   if not ts_client then
-    -- No TypeScript LSP client found
     callback({})
     return
   end
@@ -62,7 +63,13 @@ function M.get_references(bufnr, line, col, callback)
         local file = vim.uri_to_fname(uri)
 
         -- Skip node_modules (framework noise like Angular lifecycle hook calls)
-        if file:match("node_modules") then
+        -- For local_only mode, also skip files that aren't the current file
+        local skip = file:match("node_modules")
+        if local_only and file ~= current_file then
+          skip = true
+        end
+
+        if skip then
           filtered_count = filtered_count + 1
         else
           local ref_line = range.start.line + 1 -- Convert to 1-indexed
@@ -72,7 +79,6 @@ function M.get_references(bufnr, line, col, callback)
           local is_definition = file == current_file and range.start.line == line
 
           if not is_definition then
-            -- Get context (line content)
             local context = M.get_line_content(file, ref_line)
 
             table.insert(refs, {
@@ -99,7 +105,6 @@ end
 ---@param line_num number 1-indexed line number
 ---@return string
 function M.get_line_content(file, line_num)
-  -- Check if file is loaded in a buffer
   local bufnr = vim.fn.bufnr(file)
   if bufnr ~= -1 and vim.api.nvim_buf_is_loaded(bufnr) then
     local lines = vim.api.nvim_buf_get_lines(bufnr, line_num - 1, line_num, false)
@@ -108,7 +113,6 @@ function M.get_line_content(file, line_num)
     end
   end
 
-  -- Read from disk
   local ok, lines = pcall(vim.fn.readfile, file, "", line_num)
   if ok and lines and #lines >= line_num then
     return vim.trim(lines[line_num])

@@ -1,0 +1,40 @@
+<div class="ts-patterns">
+  <h2>TypeScript Patterns Test</h2>
+
+  <!-- Public property interpolation -->
+  <p>{{ publicProp }}</p>
+  <p>{{ readonlyProp }}</p>
+  <p>{{ protectedProp }}</p>
+
+  <!-- Optional and definite properties -->
+  <p>{{ optionalProp }}</p>
+  <p>{{ definiteProp }}</p>
+
+  <!-- Array and object properties -->
+  <p>{{ arrayProp[0] }}</p>
+  <p>{{ arrayProp.length }}</p>
+  <p>{{ objectProp.key }}</p>
+  <p>{{ objectProp.count }}</p>
+
+  <!-- Enum property -->
+  <p>{{ enumProp }}</p>
+
+  <!-- Method calls -->
+  <p>{{ publicMethod() }}</p>
+  <p>{{ methodWithParams('test', 5) }}</p>
+
+  <!-- Getter -->
+  <p>{{ computedValue }}</p>
+  <p>{{ readonlyComputed }}</p>
+
+  <!-- Property binding -->
+  <div [title]="publicProp">Hover me</div>
+  <div [attr.data-value]="readonlyProp">Data attr</div>
+
+  <!-- Event binding with method -->
+  <button (click)="publicMethod()">Call Method</button>
+  <button (click)="useExternals()">Use Externals</button>
+
+  <!-- Multiple uses of same property -->
+  <span>{{ publicProp }} - {{ publicProp }}</span>
+</div>

@@ -1,0 +1,178 @@
+<div class="template-patterns">
+  <h2>Template Patterns Test</h2>
+
+  <!-- === INTERPOLATION === -->
+  <section>
+    <h3>Interpolation</h3>
+    <p>{{ simpleProperty }}</p>
+    <p>{{ methodCall() }}</p>
+    <p>{{ nested.deep.property }}</p>
+    <p>{{ nested.deep.value }}</p>
+    <p>{{ condition ? trueValue : falseValue }}</p>
+    <p>{{ arrayProp[0] }}</p>
+    <p>{{ arrayProp.length }}</p>
+    <p>{{ 'prefix-' + simpleProperty + '-suffix' }}</p>
+  </section>
+
+  <!-- === PROPERTY BINDING === -->
+  <section>
+    <h3>Property Binding</h3>
+    <div [id]="elementId"></div>
+    <div [class.active]="isActive"></div>
+    <div [class]="isActive ? 'active' : 'inactive'"></div>
+    <div [style.color]="textColor"></div>
+    <div [style.opacity]="isActive ? 1 : 0.5"></div>
+    <div [attr.data-id]="dataId"></div>
+    <div [attr.aria-label]="simpleProperty"></div>
+    <input [value]="inputValue">
+    <input [disabled]="!isActive">
+    <div [hidden]="!showContent"></div>
+  </section>
+
+  <!-- === EVENT BINDING === -->
+  <section>
+    <h3>Event Binding</h3>
+    <button (click)="handleClick()">Click</button>
+    <button (click)="handleClickWithEvent($event)">Click with Event</button>
+    <input (input)="onInput($event)">
+    <input (keydown.enter)="onEnter()">
+    <input (keydown.escape)="toggleShow()">
+    <input (blur)="handleClick()">
+    <input (focus)="handleClick()">
+    <div (customEvent)="onCustom($event)">Custom Event</div>
+  </section>
+
+  <!-- === TWO-WAY BINDING === -->
+  <section>
+    <h3>Two-Way Binding</h3>
+    <input [(ngModel)]="twoWayValue">
+    <p>Two-way value: {{ twoWayValue }}</p>
+  </section>
+
+  <!-- === TEMPLATE REFERENCES === -->
+  <section>
+    <h3>Template References</h3>
+    <input #myInput type="text">
+    <button (click)="focusInput()">Focus Input</button>
+
+    <ng-template #myTemplate let-data>
+      <p>Template: {{ data.name }} - {{ data.value }}</p>
+    </ng-template>
+
+    <ng-container *ngTemplateOutlet="myTemplate; context: { $implicit: templateContext }"></ng-container>
+  </section>
+
+  <!-- === STRUCTURAL DIRECTIVES (LEGACY) === -->
+  <section>
+    <h3>Legacy Structural Directives</h3>
+
+    <div *ngIf="legacyCondition">Legacy condition is true</div>
+    <div *ngIf="showContent; else legacyElseBlock">Show content</div>
+    <ng-template #legacyElseBlock>Else block content</ng-template>
+
+    <div *ngIf="legacyCondition; then legacyThenBlock else legacyElseBlock2"></div>
+    <ng-template #legacyThenBlock>Then block</ng-template>
+    <ng-template #legacyElseBlock2>Else block 2</ng-template>
+
+    <ul>
+      <li *ngFor="let item of legacyItems; let i = index; let first = first; let last = last; trackBy: trackByIndex">
+        {{ i }}: {{ item }} (first: {{ first }}, last: {{ last }})
+      </li>
+    </ul>
+
+    <div [ngSwitch]="legacyStatus">
+      <span *ngSwitchCase="'on'">Switch is ON</span>
+      <span *ngSwitchCase="'off'">Switch is OFF</span>
+      <span *ngSwitchDefault>Switch is unknown</span>
+    </div>
+
+    <div *ngIf="items.length > 0">
+      <p *ngFor="let item of items; trackBy: trackById">{{ item.name }} ({{ item.category }})</p>
+    </div>
+  </section>
+
+  <!-- === CONTROL FLOW (ANGULAR 17+) === -->
+  <section>
+    <h3>New Control Flow</h3>
+
+    @if (showContent) {
+      <div>{{ ifContent }}</div>
+    } @else if (alternateCondition) {
+      <div>{{ elseIfContent }}</div>
+    } @else {
+      <div>{{ elseContent }}</div>
+    }
+
+    @if (condition && isActive) {
+      <p>Both conditions true</p>
+    }
+
+    @for (item of items; track item.id; let idx = $index, first = $first, last = $last) {
+      <div>
+        {{ idx }}: {{ item.name }} - {{ item.category }}
+        @if (first) { <span>(first)</span> }
+        @if (last) { <span>(last)</span> }
+      </div>
+    } @empty {
+      <div>{{ emptyMessage }}</div>
+    }
+
+    @for (item of getItems(); track item.id) {
+      <p>Method result: {{ item.name }}</p>
+    }
+
+    @switch (status) {
+      @case ('active') { <span>{{ activeLabel }}</span> }
+      @case ('pending') { <span>{{ pendingLabel }}</span> }
+      @default { <span>{{ defaultLabel }}</span> }
+    }
+
+    @defer (on viewport) {
+      <div [attr.data-content]="deferredData">Deferred content loaded</div>
+    } @loading (minimum 500ms) {
+      <span>{{ loadingText }}</span>
+    } @placeholder {
+      <span>{{ placeholderText }}</span>
+    } @error {
+      <span>Error loading deferred content</span>
+    }
+
+    @let fullName = firstName + ' ' + lastName;
+    <p>Let variable: {{ fullName }}</p>
+
+    @let computedValue = items.length * 10;
+    <p>Computed: {{ computedValue }}</p>
+  </section>
+
+  <!-- === PIPES === -->
+  <section>
+    <h3>Pipes</h3>
+    <p>{{ dateValue | date:'short' }}</p>
+    <p>{{ dateValue | date:'fullDate' }}</p>
+    <p>{{ textValue | uppercase }}</p>
+    <p>{{ textValue | lowercase }}</p>
+    <p>{{ textValue | titlecase }}</p>
+    <p>{{ price | currency:'USD' }}</p>
+    <p>{{ price | currency:'EUR':'symbol':'1.0-0' }}</p>
+    <p>{{ price | number:'1.2-2' }}</p>
+    <p>{{ items | json }}</p>
+    <p>{{ arrayProp | slice:0:2 }}</p>
+
+    <p>Async: {{ asyncData$ | async }}</p>
+    <p>Async Subject: {{ asyncSubject$ | async }}</p>
+
+    @if (asyncData$ | async; as asyncValue) {
+      <p>Async value: {{ asyncValue }}</p>
+    }
+  </section>
+
+  <!-- === CONTROL BUTTONS === -->
+  <section>
+    <h3>Controls</h3>
+    <button (click)="toggleShow()">Toggle Show</button>
+    <button (click)="changeStatus('active')">Set Active</button>
+    <button (click)="changeStatus('pending')">Set Pending</button>
+    <button (click)="changeStatus('inactive')">Set Inactive</button>
+    <button (click)="addItem()">Add Item</button>
+  </section>
+</div>

@@ -2,7 +2,6 @@ local M = {}
 
 local ns_id = vim.api.nvim_create_namespace("angular-refs")
 
--- Debounce timers per buffer
 ---@type table<number, any>
 local debounce_timers = {}
 
@@ -10,15 +9,12 @@ local debounce_timers = {}
 ---@type table<number, true>
 local active_refreshes = {}
 
--- Track extmark IDs per buffer: { [bufnr] = { [line] = extmark_id } }
 ---@type table<number, table<number, number>>
 local extmark_ids = {}
 
--- Store last computed results per buffer for querying
 ---@type table<number, table<number, {symbol: Symbol, ts_count: number, template_count: number}>>
 local last_results = {}
 
--- Generation counter per buffer to handle async race conditions
 ---@type table<number, number>
 local update_generation = {}
 
@@ -35,11 +31,12 @@ local function get_symbols_async(bufnr, callback)
   local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
 
   -- Get TypeScript LSP client
-  local clients = vim.lsp.get_clients({ bufnr = bufnr })
+  local server = require("angular-refs.server")
   local ts_client = nil
-  for _, client in ipairs(clients) do
-    if client.name == "typescript-tools" or client.name == "ts_ls" or client.name == "vtsls" then
-      ts_client = client
+  for _, name in ipairs(server.TS_CLIENT_NAMES) do
+    local clients = vim.lsp.get_clients({ bufnr = bufnr, name = name })
+    if #clients > 0 then
+      ts_client = clients[1]
       break
     end
   end
@@ -108,11 +105,12 @@ local function get_symbols_async(bufnr, callback)
           local child_range = child.range or child.location and child.location.range
           if child_range and child.kind and MEMBER_KINDS[child.kind] then
             local child_name = child.name
-            -- Skip private members only
+            local child_line = child_range.start.line
+            -- Skip underscore-prefixed members (convention for private)
             if not child_name:match("^_") then
               table.insert(symbols, {
                 name = child_name,
-                line = child_range.start.line,
+                line = child_line,
                 col = child_range.start.character,
                 kind = SK[child.kind] or "unknown",
               })
@@ -188,53 +186,102 @@ function M.update(bufnr)
       return
     end
 
-    local lsp = require("angular-refs.lsp")
     local server = require("angular-refs.server")
+    local lsp = require("angular-refs.lsp")
+    local cfg = require("angular-refs.config").get()
 
-    -- Process each symbol
     local pending_count = #symbols
+    if pending_count == 0 then
+      active_refreshes[bufnr] = nil
+      return
+    end
+
+    -- Comprehensive mode: Use WebStorm-style counting (includes parent usages)
+    if cfg.comprehensive_mode then
+      server.get_comprehensive_counts(bufnr, function(comprehensive_counts)
+        if update_generation[bufnr] ~= current_gen then
+          active_refreshes[bufnr] = nil
+          return
+        end
+
+        local results = {}
+        for _, symbol in ipairs(symbols) do
+          local count = comprehensive_counts[symbol.name] or 0
+          results[symbol.line] = {
+            symbol = symbol,
+            ts_count = 0,
+            template_count = count,
+          }
+        end
+
+        active_refreshes[bufnr] = nil
+        M.render_results(bufnr, results)
+      end)
+      return
+    end
+
+    -- Standard mode: TS LSP refs + own template refs
     local results = {}
 
     for _, symbol in ipairs(symbols) do
-      -- Get TS references via LSP (async)
+      -- For lifecycle methods, only get LOCAL refs (same file)
+      -- This avoids counting 179 project-wide ngOnInit implementations
+      local is_lifecycle = server.is_lifecycle_method(symbol.name)
+
+      -- Get TS references via LSP (local_only for lifecycle methods)
       lsp.get_references(bufnr, symbol.line, symbol.col, function(ts_refs)
-        -- Check if this update is still current
         if update_generation[bufnr] ~= current_gen then
           return
         end
 
-        -- Get template references via Angular LSP
-        server.get_template_refs(bufnr, symbol.name, function(template_refs)
-          -- Check if this update is still current
-          if update_generation[bufnr] ~= current_gen then
-            return
-          end
+        -- Get template references (skip for lifecycle methods - they're not called from templates)
+        if is_lifecycle then
+          -- Get decorator refs for @HostListener/@HostBinding
+          local decorator_refs = server.get_decorator_refs(bufnr, symbol.name)
 
           results[symbol.line] = {
             symbol = symbol,
             ts_count = ts_refs and #ts_refs or 0,
-            template_count = template_refs and #template_refs or 0,
+            template_count = decorator_refs,
           }
 
           pending_count = pending_count - 1
-
-          -- When all symbols are processed, update display
           if pending_count == 0 then
             active_refreshes[bufnr] = nil
             M.render_results(bufnr, results)
           end
-        end)
-      end)
+        else
+          server.get_template_refs(bufnr, symbol.name, function(template_refs)
+            if update_generation[bufnr] ~= current_gen then
+              return
+            end
+
+            -- Get decorator refs for @HostListener/@HostBinding
+            local decorator_refs = server.get_decorator_refs(bufnr, symbol.name)
+
+            results[symbol.line] = {
+              symbol = symbol,
+              ts_count = ts_refs and #ts_refs or 0,
+              template_count = (template_refs and #template_refs or 0) + decorator_refs,
+            }
+
+            pending_count = pending_count - 1
+            if pending_count == 0 then
+              active_refreshes[bufnr] = nil
+              M.render_results(bufnr, results)
+            end
+          end)
+        end
+      end, is_lifecycle) -- Pass local_only flag for lifecycle methods
     end
 
-    -- Timeout fallback
+    -- Timeout fallback: clear stale state after 10 seconds if LSP hasn't responded
     vim.defer_fn(function()
-      if update_generation[bufnr] == current_gen and pending_count > 0 then
-        pending_count = 0
+      if update_generation[bufnr] == current_gen and active_refreshes[bufnr] then
         active_refreshes[bufnr] = nil
-        M.render_results(bufnr, results)
+        vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
       end
-    end, 5000)
+    end, 10000)
   end)
 end
 
@@ -283,12 +330,10 @@ end
 function M.schedule_update(bufnr)
   local cfg = require("angular-refs.config").get()
 
-  -- Cancel existing timer for this buffer
   if debounce_timers[bufnr] then
     vim.fn.timer_stop(debounce_timers[bufnr])
   end
 
-  -- Schedule new update
   debounce_timers[bufnr] = vim.fn.timer_start(cfg.trigger.debounce_ms, function()
     debounce_timers[bufnr] = nil
     vim.schedule(function()

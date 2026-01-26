@@ -1,0 +1,896 @@
+local server = require('angular-refs.server')
+local helpers = require('test.helpers')
+
+describe('angular-refs.server', function()
+  describe('is_lifecycle_method', function()
+    it('should identify ngOnInit as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngOnInit'))
+    end)
+
+    it('should identify ngOnDestroy as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngOnDestroy'))
+    end)
+
+    it('should identify ngOnChanges as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngOnChanges'))
+    end)
+
+    it('should identify ngDoCheck as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngDoCheck'))
+    end)
+
+    it('should identify ngAfterContentInit as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngAfterContentInit'))
+    end)
+
+    it('should identify ngAfterContentChecked as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngAfterContentChecked'))
+    end)
+
+    it('should identify ngAfterViewInit as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngAfterViewInit'))
+    end)
+
+    it('should identify ngAfterViewChecked as lifecycle method', function()
+      assert.is_true(server.is_lifecycle_method('ngAfterViewChecked'))
+    end)
+
+    it('should NOT identify regular methods as lifecycle methods', function()
+      assert.is_false(server.is_lifecycle_method('handleClick'))
+      assert.is_false(server.is_lifecycle_method('saveData'))
+      assert.is_false(server.is_lifecycle_method('processItems'))
+      assert.is_false(server.is_lifecycle_method('init'))
+      assert.is_false(server.is_lifecycle_method('destroy'))
+    end)
+  end)
+
+  describe('parse_tcb_symbols', function()
+    it('should parse ((this)).property pattern', function()
+      local tcb = [[
+        var _t1 = null! as MyComponent;
+        ((this)).myProperty;
+        ((this)).anotherProperty;
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['myProperty'] or 0)
+      assert.equals(1, symbols['anotherProperty'] or 0)
+    end)
+
+    it('should parse (this).property pattern', function()
+      local tcb = [[
+        (this).simpleProperty;
+        (this).methodCall();
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['simpleProperty'] or 0)
+      assert.equals(1, symbols['methodCall'] or 0)
+    end)
+
+    it('should parse this.property pattern', function()
+      local tcb = [[
+        this.directProperty;
+        this.directMethod();
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['directProperty'] or 0)
+      assert.equals(1, symbols['directMethod'] or 0)
+    end)
+
+    it('should parse ((_ctx)).property pattern (legacy)', function()
+      local tcb = [[
+        ((_ctx)).legacyProperty;
+        ((_ctx)).legacyMethod();
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['legacyProperty'] or 0)
+      assert.equals(1, symbols['legacyMethod'] or 0)
+    end)
+
+    it('should parse _ctx.property pattern (legacy)', function()
+      local tcb = [[
+        _ctx.oldProperty;
+        _ctx.oldMethod();
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['oldProperty'] or 0)
+      assert.equals(1, symbols['oldMethod'] or 0)
+    end)
+
+    it('should count multiple occurrences of the same symbol', function()
+      local tcb = [[
+        ((this)).count;
+        ((this)).count;
+        ((this)).count;
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(3, symbols['count'] or 0)
+    end)
+
+    it('should handle mixed patterns', function()
+      local tcb = [[
+        ((this)).prop1;
+        (this).prop2;
+        this.prop3;
+        ((_ctx)).prop4;
+        _ctx.prop5;
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['prop1'] or 0)
+      assert.equals(1, symbols['prop2'] or 0)
+      assert.equals(1, symbols['prop3'] or 0)
+      assert.equals(1, symbols['prop4'] or 0)
+      assert.equals(1, symbols['prop5'] or 0)
+    end)
+
+    it('should handle method calls with parentheses', function()
+      local tcb = [[
+        ((this)).getData();
+        ((this)).processItem(item);
+        ((this)).calculate(a, b, c);
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['getData'] or 0)
+      assert.equals(1, symbols['processItem'] or 0)
+      assert.equals(1, symbols['calculate'] or 0)
+    end)
+
+    it('should handle property access chains', function()
+      local tcb = [[
+        ((this)).nested.deep.value;
+        ((this)).config.option;
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['nested'] or 0)
+      assert.equals(1, symbols['config'] or 0)
+    end)
+
+    it('should return empty table for empty input', function()
+      local symbols = server.parse_tcb_symbols('')
+      assert.same({}, symbols)
+    end)
+
+    it('should return empty table for nil input', function()
+      local symbols = server.parse_tcb_symbols(nil)
+      assert.same({}, symbols)
+    end)
+
+    it('should ignore non-matching patterns', function()
+      local tcb = [[
+        var x = 5;
+        const name = "test";
+        function doSomething() {}
+      ]]
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.same({}, symbols)
+    end)
+  end)
+
+  describe('find_template_file', function()
+    it('should return nil for non-component files', function()
+      local result = server.find_template_file('/path/to/service.ts')
+      assert.is_nil(result)
+    end)
+  end)
+
+  describe('find_project_root', function()
+    it('should return nil for non-existent path', function()
+      local result = server.find_project_root('/non/existent/path')
+      assert.is_nil(result)
+    end)
+  end)
+
+  describe('find_selector_usages', function()
+    it('should return empty for nil selector', function()
+      local result = server.find_selector_usages(nil, {}, {}, '/some/path')
+      assert.same({}, result)
+    end)
+
+    it('should return empty for nil project root', function()
+      local result = server.find_selector_usages('app-test', {}, {}, nil)
+      assert.same({}, result)
+    end)
+
+    it('should return empty for empty inputs and outputs', function()
+      local result = server.find_selector_usages('app-test', {}, {}, '/some/path')
+      assert.same({}, result)
+    end)
+
+    it('should return empty when no HTML files match selector', function()
+      local result = server.find_selector_usages('app-nonexistent', {
+        { name = 'testInput', alias = nil, kind = 'decorator' }
+      }, {}, '/tmp/nonexistent')
+      assert.same({}, result)
+    end)
+  end)
+
+  describe('get_declarations_in_buffer', function()
+    it('should find property declarations', function()
+      local content = [[
+export class TestComponent {
+  myProperty = 'value';
+  anotherProp: string;
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['myProperty'] or false)
+      assert.is_true(names['anotherProp'] or false)
+    end)
+
+    it('should find method declarations', function()
+      local content = [[
+export class TestComponent {
+  myMethod() {}
+  async asyncMethod() {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['myMethod'] or false)
+      assert.is_true(names['asyncMethod'] or false)
+    end)
+
+    it('should find getter and setter declarations', function()
+      local content = [[
+export class TestComponent {
+  get computedValue() { return ''; }
+  set computedValue(v: string) {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['computedValue'] or false)
+    end)
+
+    it('should find signal declarations', function()
+      local content = [[
+export class TestComponent {
+  count = signal(0);
+  simpleInput = input<string>();
+  requiredInput = input.required<string>();
+  clicked = output<void>();
+  twoWay = model(0);
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['count'] or false)
+      assert.is_true(names['simpleInput'] or false)
+      assert.is_true(names['requiredInput'] or false)
+      assert.is_true(names['clicked'] or false)
+      assert.is_true(names['twoWay'] or false)
+    end)
+
+    it('should find Angular 19+ signal declarations', function()
+      local content = [[
+export class TestComponent {
+  count = signal(0);
+  doubled = linkedSignal(() => this.count() * 2);
+  userData = resource({
+    request: () => ({ id: this.userId() }),
+    loader: ({ request }) => fetch('/api/users/' + request.id)
+  });
+  rxData = rxResource({
+    request: () => this.searchTerm(),
+    loader: ({ request }) => this.http.get('/api/search?q=' + request)
+  });
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['count'] or false)
+      assert.is_true(names['doubled'] or false)
+      assert.is_true(names['userData'] or false)
+      assert.is_true(names['rxData'] or false)
+    end)
+
+    it('should exclude private members', function()
+      local content = [[
+export class TestComponent {
+  publicProp = 'public';
+  private privateProp = 'private';
+  #ecmaPrivate = 'ecma';
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['publicProp'] or false)
+      assert.is_falsy(names['privateProp'])
+      assert.is_falsy(names['ecmaPrivate'])
+    end)
+
+    it('should return empty for non-class content', function()
+      local content = [[
+const x = 5;
+function helper() {}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      assert.equals(0, #decls)
+    end)
+
+    it('should exclude lifecycle methods from declarations', function()
+      local content = [[
+export class TestComponent {
+  publicProp = 'value';
+  ngOnInit() {}
+  ngOnDestroy() {}
+  ngAfterViewInit() {}
+  handleClick() {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['publicProp'] or false)
+      assert.is_true(names['handleClick'] or false)
+      assert.is_falsy(names['ngOnInit'])
+      assert.is_falsy(names['ngOnDestroy'])
+      assert.is_falsy(names['ngAfterViewInit'])
+    end)
+
+    it('should exclude all Angular lifecycle methods', function()
+      local content = [[
+export class TestComponent {
+  ngOnInit() {}
+  ngOnDestroy() {}
+  ngOnChanges() {}
+  ngDoCheck() {}
+  ngAfterContentInit() {}
+  ngAfterContentChecked() {}
+  ngAfterViewInit() {}
+  ngAfterViewChecked() {}
+  regularMethod() {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['regularMethod'] or false)
+      assert.is_falsy(names['ngOnInit'])
+      assert.is_falsy(names['ngOnDestroy'])
+      assert.is_falsy(names['ngOnChanges'])
+      assert.is_falsy(names['ngDoCheck'])
+      assert.is_falsy(names['ngAfterContentInit'])
+      assert.is_falsy(names['ngAfterContentChecked'])
+      assert.is_falsy(names['ngAfterViewInit'])
+      assert.is_falsy(names['ngAfterViewChecked'])
+    end)
+
+    it('should include line and column information', function()
+      local content = [[
+export class TestComponent {
+  myProperty = 'value';
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      assert.equals(1, #decls)
+      assert.equals('myProperty', decls[1].name)
+      assert.equals(1, decls[1].line) -- 0-indexed, line 2 = index 1
+      assert.is_true(decls[1].col >= 0)
+    end)
+  end)
+
+  describe('get_component_metadata', function()
+    it('should extract component selector', function()
+      local content = [[
+@Component({
+  selector: 'app-test',
+  template: ''
+})
+export class TestComponent {}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals('app-test', metadata.selector)
+    end)
+
+    it('should extract simple @Input properties', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  @Input() name: string;
+  @Input() value: number;
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(2, #metadata.inputs)
+
+      local names = {}
+      for _, input in ipairs(metadata.inputs) do
+        names[input.name] = input
+      end
+
+      assert.is_not_nil(names['name'])
+      assert.is_nil(names['name'].alias)
+      assert.is_not_nil(names['value'])
+    end)
+
+    it('should extract aliased @Input properties', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  @Input('externalName') internalName: string;
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(1, #metadata.inputs)
+      assert.equals('internalName', metadata.inputs[1].name)
+      assert.equals('externalName', metadata.inputs[1].alias)
+    end)
+
+    it('should extract @Input with options object', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  @Input({ required: true, alias: 'external' }) internal: string;
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(1, #metadata.inputs)
+      assert.equals('internal', metadata.inputs[1].name)
+      assert.equals('external', metadata.inputs[1].alias)
+      assert.is_true(metadata.inputs[1].required)
+    end)
+
+    it('should extract simple @Output properties', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  @Output() clicked = new EventEmitter<void>();
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(1, #metadata.outputs)
+      assert.equals('clicked', metadata.outputs[1].name)
+      assert.is_nil(metadata.outputs[1].alias)
+    end)
+
+    it('should extract aliased @Output properties', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  @Output('externalEvent') internalEvent = new EventEmitter<void>();
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(1, #metadata.outputs)
+      assert.equals('internalEvent', metadata.outputs[1].name)
+      assert.equals('externalEvent', metadata.outputs[1].alias)
+    end)
+
+    it('should extract signal inputs', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  name = input<string>();
+  requiredName = input.required<string>();
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(2, #metadata.inputs)
+
+      local inputs = {}
+      for _, input in ipairs(metadata.inputs) do
+        inputs[input.name] = input
+      end
+
+      assert.is_not_nil(inputs['name'])
+      assert.equals('signal', inputs['name'].kind)
+      assert.is_not_nil(inputs['requiredName'])
+      assert.is_true(inputs['requiredName'].required)
+    end)
+
+    it('should extract signal outputs', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  clicked = output<void>();
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(1, #metadata.outputs)
+      assert.equals('clicked', metadata.outputs[1].name)
+      assert.equals('signal', metadata.outputs[1].kind)
+    end)
+
+    it('should extract model (two-way binding) as input and output', function()
+      local content = [[
+@Component({ selector: 'app-test', template: '' })
+export class TestComponent {
+  count = model<number>(0);
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.equals(1, #metadata.inputs)
+      assert.equals('count', metadata.inputs[1].name)
+      assert.equals(1, #metadata.outputs)
+      assert.equals('countChange', metadata.outputs[1].name)
+    end)
+
+    it('should return empty metadata for non-component files', function()
+      local content = [[
+export class MyService {
+  getData() {}
+}
+]]
+      local metadata = server.get_component_metadata(content)
+      assert.is_nil(metadata.selector)
+      assert.equals(0, #metadata.inputs)
+      assert.equals(0, #metadata.outputs)
+    end)
+  end)
+
+  describe('parse_host_bindings', function()
+    it('should parse property bindings in host', function()
+      local content = [[
+@Component({
+  host: {
+    '[class.active]': 'isActive',
+    '[attr.data-id]': 'componentId'
+  }
+})
+]]
+      local symbols = server.parse_host_bindings(content)
+      assert.equals(1, symbols['isActive'] or 0)
+      assert.equals(1, symbols['componentId'] or 0)
+    end)
+
+    it('should parse event bindings in host', function()
+      local content = [[
+@Component({
+  host: {
+    '(click)': 'onClick($event)',
+    '(window:resize)': 'onResize($event)'
+  }
+})
+]]
+      local symbols = server.parse_host_bindings(content)
+      assert.equals(1, symbols['onClick'] or 0)
+      assert.equals(1, symbols['onResize'] or 0)
+    end)
+
+    it('should return empty for no host block', function()
+      local content = [[
+@Component({
+  selector: 'app-test'
+})
+]]
+      local symbols = server.parse_host_bindings(content)
+      assert.same({}, symbols)
+    end)
+  end)
+
+  describe('parse_template_control_flow', function()
+    it('should parse event bindings', function()
+      local content = [[
+<button (click)="handleClick()">Click</button>
+<div (contextmenu)="onContextMenu($event)">Right click</div>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['handleClick'] or 0)
+      assert.equals(1, symbols['onContextMenu'] or 0)
+    end)
+
+    it('should parse @for collection', function()
+      local content = [[
+@for (item of items; track item.id) {
+  <div>{{ item.name }}</div>
+}
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['items'] or 0)
+    end)
+
+    it('should parse @if conditions', function()
+      local content = [[
+@if (showContent) {
+  <div>Visible</div>
+}
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['showContent'] or 0)
+    end)
+
+    it('should parse interpolations', function()
+      local content = [[
+<p>{{ message }}</p>
+<span>{{ count }}</span>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['message'] or 0)
+      assert.equals(1, symbols['count'] or 0)
+    end)
+
+    it('should return empty for nil input', function()
+      local symbols = server.parse_template_control_flow(nil)
+      assert.same({}, symbols)
+    end)
+
+    it('should parse *ngIf legacy directive', function()
+      local content = [[
+<div *ngIf="showContent">Visible</div>
+<span *ngIf="isLoading">Loading...</span>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['showContent'] or 0)
+      assert.equals(1, symbols['isLoading'] or 0)
+    end)
+
+    it('should parse *ngIf with else block', function()
+      local content = [[
+<div *ngIf="hasData; else noDataTemplate">Has data</div>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['hasData'] or 0)
+    end)
+
+    it('should parse *ngFor legacy directive', function()
+      local content = [[
+<li *ngFor="let item of items">{{ item.name }}</li>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['items'] or 0)
+    end)
+
+    it('should parse *ngFor with trackBy', function()
+      local content = [[
+<li *ngFor="let item of items; trackBy: trackById">{{ item.name }}</li>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['items'] or 0)
+      assert.equals(1, symbols['trackById'] or 0)
+    end)
+
+    it('should parse [ngSwitch] directive', function()
+      local content = [[
+<div [ngSwitch]="status">
+  <span *ngSwitchCase="'active'">Active</span>
+</div>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['status'] or 0) >= 1)
+    end)
+
+    it('should parse ternary expressions in interpolations', function()
+      local content = [[
+<p>{{ isActive ? activeLabel : inactiveLabel }}</p>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['isActive'] or 0) >= 1)
+      assert.is_true((symbols['activeLabel'] or 0) >= 1)
+      assert.is_true((symbols['inactiveLabel'] or 0) >= 1)
+    end)
+
+    it('should parse pipe expressions', function()
+      local content = [[
+<p>{{ dateValue | date:'short' }}</p>
+<span>{{ textValue | uppercase }}</span>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['dateValue'] or 0) >= 1)
+      assert.is_true((symbols['textValue'] or 0) >= 1)
+    end)
+
+    it('should parse async pipe with observables', function()
+      local content = [[
+<div>{{ data$ | async }}</div>
+<span>{{ asyncData$ | async }}</span>
+]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['data$'] or 0)
+      assert.equals(1, symbols['asyncData$'] or 0)
+    end)
+
+    it('should handle method with arguments in template', function()
+      local content = '<button (click)="save(item, index, $event)">Save</button>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['save'] or 0)
+    end)
+
+    it('should handle signal() calls in template', function()
+      local content = '{{ count() }}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['count'] or 0)
+    end)
+
+    it('should handle multiple refs to same symbol', function()
+      local content = [[
+        <div>{{ items.length }}</div>
+        <ul>
+          @for (item of items; track item) {
+            <li>{{ item }}</li>
+          }
+        </ul>
+        <span *ngIf="items.length > 0">Has items</span>
+      ]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['items'] or 0) >= 2)
+    end)
+
+    it('should handle complex event handler expressions', function()
+      local content = '<input (input)="name = $event.target.value" />'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['name'] or 0)
+    end)
+
+    it('should handle property binding expressions', function()
+      local content = '<div [class.active]="isActive" [style.color]="textColor"></div>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['isActive'] or 0)
+      assert.equals(1, symbols['textColor'] or 0)
+    end)
+
+    it('should handle two-way binding', function()
+      local content = '<input [(ngModel)]="username" />'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['username'] or 0)
+    end)
+
+    it('should handle @switch expression', function()
+      local content = [[
+        @switch (status) {
+          @case ('active') { <span>Active</span> }
+          @case ('inactive') { <span>Inactive</span> }
+        }
+      ]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['status'] or 0)
+    end)
+
+    it('should handle @let declarations', function()
+      local content = '@let total = count * price'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['count'] or 0)
+      assert.equals(1, symbols['price'] or 0)
+    end)
+  end)
+
+  describe('get_decorator_refs', function()
+    it('should count @HostListener decorated method', function()
+      local content = [[
+export class TestComponent {
+  @HostListener('click')
+  handleClick() {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local refs = server.get_decorator_refs(buf, 'handleClick')
+      vim.api.nvim_buf_delete(buf, { force = true })
+      assert.equals(1, refs)
+    end)
+
+    it('should count @HostListener with event details', function()
+      local content = [[
+export class TestComponent {
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent) {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local refs = server.get_decorator_refs(buf, 'onKeydown')
+      vim.api.nvim_buf_delete(buf, { force = true })
+      assert.equals(1, refs)
+    end)
+
+    it('should count @HostBinding property', function()
+      local content = [[
+export class TestComponent {
+  @HostBinding('class.active')
+  isActive = false;
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local refs = server.get_decorator_refs(buf, 'isActive')
+      vim.api.nvim_buf_delete(buf, { force = true })
+      assert.equals(1, refs)
+    end)
+
+    it('should count @HostBinding getter', function()
+      local content = [[
+export class TestComponent {
+  @HostBinding('attr.data-id')
+  get dataId() { return this.id; }
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local refs = server.get_decorator_refs(buf, 'dataId')
+      vim.api.nvim_buf_delete(buf, { force = true })
+      assert.equals(1, refs)
+    end)
+
+    it('should return 0 for non-decorated methods', function()
+      local content = [[
+export class TestComponent {
+  regularMethod() {}
+  anotherMethod() {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local refs = server.get_decorator_refs(buf, 'regularMethod')
+      vim.api.nvim_buf_delete(buf, { force = true })
+      assert.equals(0, refs)
+    end)
+
+    it('should handle multiple decorators on different methods', function()
+      local content = [[
+export class TestComponent {
+  @HostListener('click')
+  onClick() {}
+
+  @HostListener('keydown')
+  onKeydown() {}
+
+  @HostBinding('class.active')
+  isActive = false;
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local onClick = server.get_decorator_refs(buf, 'onClick')
+      local onKeydown = server.get_decorator_refs(buf, 'onKeydown')
+      local isActive = server.get_decorator_refs(buf, 'isActive')
+      vim.api.nvim_buf_delete(buf, { force = true })
+      assert.equals(1, onClick)
+      assert.equals(1, onKeydown)
+      assert.equals(1, isActive)
+    end)
+  end)
+end)

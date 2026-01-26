@@ -16,6 +16,7 @@ local M = {}
 
 ---@class AngularRefsConfig
 ---@field enabled boolean Enable the plugin
+---@field comprehensive_mode boolean Enable WebStorm-style parent tracking (slower but more complete)
 ---@field display AngularRefsDisplayConfig Display configuration
 ---@field trigger AngularRefsTriggerConfig Trigger configuration
 ---@field debug boolean Enable debug logging
@@ -23,9 +24,10 @@ local M = {}
 ---@type AngularRefsConfig
 M.defaults = {
   enabled = true,
+  comprehensive_mode = false,
   display = {
     position = "eol",
-    separator = " ",
+    separator = " | ",
     format = "%d usages",
     format_singular = "%d usage",
     format_zero = "unused",
@@ -41,16 +43,21 @@ M.defaults = {
 }
 
 ---@type AngularRefsConfig
-M.current = vim.deepcopy(M.defaults)
+M.options = vim.deepcopy(M.defaults)
 
 ---@param opts AngularRefsConfig|nil
 function M.setup(opts)
-  M.current = vim.tbl_deep_extend("force", M.defaults, opts or {})
+  M.options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
 end
 
 ---@return AngularRefsConfig
 function M.get()
-  return M.current
+  return M.options
+end
+
+---@return boolean
+function M.is_enabled()
+  return M.options.enabled
 end
 
 return M

@@ -1,0 +1,69 @@
+<div class="parent-component">
+  <h3>Parent-Child Test</h3>
+
+  <!-- Parent state -->
+  <section>
+    <h4>Parent State</h4>
+    <p>Parent Count: {{ parentCount }}</p>
+    <p>Parent Value: {{ parentValue }}</p>
+    <p>Output Received: {{ outputReceived }}</p>
+    <p>Aliased Output: {{ aliasedOutputReceived }}</p>
+    <p>Data Output: {{ dataOutputReceived | json }}</p>
+    <p>Signal Output: {{ signalOutputReceived }}</p>
+  </section>
+
+  <!-- Child with decorator-based bindings -->
+  <section>
+    <h4>Child with Decorator Bindings</h4>
+    <app-child
+      [simpleInput]="parentSimple"
+      [aliasedName]="parentAliased"
+      [requiredInput]="parentRequired"
+      [boolInput]="parentBool"
+      [numInput]="parentNumber"
+      [configInput]="parentConfig"
+      [optionalInput]="parentOptional"
+      (simpleOutput)="onSimpleOutput()"
+      (aliasedEvent)="onAliasedOutput($event)"
+      (dataOutput)="onDataOutput($event)"
+    ></app-child>
+  </section>
+
+  <!-- Child with signal-based bindings -->
+  <section>
+    <h4>Child with Signal Bindings</h4>
+    <app-child
+      [simpleInput]="parentSimple"
+      [requiredInput]="parentRequired"
+      [signalInput]="parentSignalInput"
+      [requiredSignalInput]="parentSignalRequired"
+      [externalSignalInput]="parentSignalAliased"
+      [(count)]="parentCount"
+      [(value)]="parentValue"
+      (signalOutput)="onSignalOutput($event)"
+      (externalSignalOutput)="onAliasedSignalOutput($event)"
+    ></app-child>
+  </section>
+
+  <!-- Child with inline expressions -->
+  <section>
+    <h4>Child with Expressions</h4>
+    <app-child
+      [simpleInput]="parentSimple + ' extended'"
+      [requiredInput]="parentRequired"
+      [boolInput]="parentCount > 0"
+      [numInput]="parentCount * 2"
+      [configInput]="{ label: 'Inline', value: parentCount }"
+      (simpleOutput)="parentCount = parentCount + 1"
+    ></app-child>
+  </section>
+
+  <!-- Parent controls -->
+  <section>
+    <h4>Controls</h4>
+    <button (click)="updateParentCount()">Increment Parent Count</button>
+    <button (click)="updateParentValue()">Update Parent Value</button>
+    <button (click)="callChildMethod()">Call Child Method</button>
+    <button (click)="resetAll()">Reset All</button>
+  </section>
+</div>

@@ -1,0 +1,546 @@
+{
+  "ts-patterns.component.ts": {
+    "EXPORTED_CONST": {
+      "expected": 1,
+      "sources": ["template: useExternals method"],
+      "note": "exported const used in component method"
+    },
+    "LOCAL_CONST": {
+      "expected": 1,
+      "sources": ["ts: localFunction"],
+      "note": "local const used in local function"
+    },
+    "mutableVar": {
+      "expected": 1,
+      "sources": ["ts: constructor"],
+      "note": "let variable incremented in constructor"
+    },
+    "exportedFunction": {
+      "expected": 1,
+      "sources": ["ts: useExternals method"],
+      "note": "exported function called in method"
+    },
+    "arrowFn": {
+      "expected": 1,
+      "sources": ["ts: useExternals method"],
+      "note": "exported arrow function called in method"
+    },
+    "publicProp": {
+      "expected": 5,
+      "sources": [
+        "template: interpolation (3x)",
+        "template: property binding",
+        "ts: publicMethod"
+      ],
+      "note": "public property used multiple times in template and method"
+    },
+    "readonlyProp": {
+      "expected": 2,
+      "sources": ["template: interpolation", "template: attr binding"],
+      "note": "readonly property used in template"
+    },
+    "privateProp": {
+      "excluded": true,
+      "reason": "private modifier - should be excluded from display"
+    },
+    "protectedProp": {
+      "expected": 2,
+      "sources": ["template: interpolation", "ts: protectedMethod"],
+      "note": "protected property"
+    },
+    "arrayProp": {
+      "expected": 2,
+      "sources": ["template: interpolation (2x)"],
+      "note": "array property accessed with index and length"
+    },
+    "objectProp": {
+      "expected": 2,
+      "sources": ["template: interpolation (2x)"],
+      "note": "object property with nested access"
+    },
+    "enumProp": {
+      "expected": 1,
+      "sources": ["template: interpolation"],
+      "note": "enum property"
+    },
+    "publicMethod": {
+      "expected": 3,
+      "sources": ["template: interpolation", "template: event binding (2x)"],
+      "note": "public method called in template"
+    },
+    "privateMethod": {
+      "excluded": true,
+      "reason": "private modifier"
+    },
+    "methodWithParams": {
+      "expected": 1,
+      "sources": ["template: interpolation"],
+      "note": "method with parameters called in template"
+    },
+    "computedValue": {
+      "expected": 1,
+      "sources": ["template: interpolation"],
+      "note": "getter property used in template"
+    },
+    "readonlyComputed": {
+      "expected": 1,
+      "sources": ["template: interpolation"],
+      "note": "readonly getter"
+    },
+    "useExternals": {
+      "expected": 1,
+      "sources": ["template: event binding"],
+      "note": "method called on button click"
+    }
+  },
+
+  "decorators.component.ts": {
+    "simpleInput": {
+      "expected": 2,
+      "sources": ["parent: app.component.ts binding", "template: interpolation"],
+      "note": "@Input with parent binding"
+    },
+    "aliasedInput": {
+      "expected": 2,
+      "sources": ["parent: via alias 'externalName'", "template: interpolation"],
+      "alias": "externalName"
+    },
+    "requiredInput": {
+      "expected": 2,
+      "sources": ["parent: binding", "template: interpolation"],
+      "note": "@Input({ required: true })"
+    },
+    "boolInput": {
+      "expected": 2,
+      "sources": ["parent: binding", "template: interpolation"],
+      "note": "@Input with booleanAttribute transform"
+    },
+    "complexInput": {
+      "expected": 2,
+      "sources": ["parent: via alias 'external'", "template: interpolation"],
+      "alias": "external"
+    },
+    "simpleOutput": {
+      "expected": 2,
+      "sources": ["parent: event listener", "ts: emitSimple method"],
+      "note": "@Output EventEmitter"
+    },
+    "aliasedOutput": {
+      "expected": 2,
+      "sources": ["parent: via alias 'externalEvent'", "ts: emitAliased method"],
+      "alias": "externalEvent"
+    },
+    "inputElement": {
+      "expected": 2,
+      "sources": ["template: #inputRef", "ts: methodWithViewChild"],
+      "note": "@ViewChild with template ref"
+    },
+    "childComponent": {
+      "expected": 2,
+      "sources": ["template: ChildComponent", "ts: methodWithViewChild"],
+      "note": "@ViewChild by component type"
+    },
+    "listItems": {
+      "expected": 4,
+      "sources": ["template: #listItem (3x)", "ts: methodWithViewChildren"],
+      "note": "@ViewChildren with multiple refs"
+    },
+    "isActive": {
+      "expected": 2,
+      "sources": ["host: [class.active]", "template: interpolation"],
+      "note": "property used in host binding and template"
+    },
+    "isDisabled": {
+      "expected": 2,
+      "sources": ["host: [class.disabled]", "template: interpolation"],
+      "note": "host binding property"
+    },
+    "componentId": {
+      "expected": 2,
+      "sources": ["host: [attr.data-id]", "template: interpolation"],
+      "note": "host attribute binding"
+    },
+    "onHostClick": {
+      "expected": 1,
+      "sources": ["host: (click)"],
+      "note": "host listener method"
+    },
+    "onMouseEnter": {
+      "expected": 1,
+      "sources": ["host: (mouseenter)"],
+      "note": "host listener"
+    },
+    "onMouseLeave": {
+      "expected": 1,
+      "sources": ["host: (mouseleave)"],
+      "note": "host listener"
+    },
+    "onResize": {
+      "expected": 1,
+      "sources": ["host: (window:resize)"],
+      "note": "window event listener"
+    },
+    "onEscape": {
+      "expected": 1,
+      "sources": ["host: (document:keydown.escape)"],
+      "note": "document event listener"
+    },
+    "regularProperty": {
+      "expected": 2,
+      "sources": ["template: interpolation", "ts: regularMethod"],
+      "note": "regular property"
+    },
+    "regularMethod": {
+      "expected": 1,
+      "sources": ["template: interpolation"],
+      "note": "regular method"
+    },
+    "emitSimple": {
+      "expected": 1,
+      "sources": ["template: event binding"],
+      "note": "output emit method"
+    },
+    "emitAliased": {
+      "expected": 1,
+      "sources": ["template: event binding"],
+      "note": "aliased output emit method"
+    }
+  },
+
+  "signals.component.ts": {
+    "simpleInput": {
+      "expected": 2,
+      "sources": ["parent: binding", "template: interpolation"],
+      "note": "signal input()"
+    },
+    "requiredInput": {
+      "expected": 2,
+      "sources": ["parent: binding", "template: interpolation"],
+      "note": "input.required()"
+    },
+    "aliasedInput": {
+      "expected": 2,
+      "sources": ["parent: via 'externalSignal'", "template: interpolation"],
+      "alias": "externalSignal"
+    },
+    "clicked": {
+      "expected": 1,
+      "sources": ["parent: event listener"],
+      "note": "signal output()"
+    },
+    "count": {
+      "expected": 4,
+      "sources": ["parent: two-way binding", "template: interpolation", "ts: effects", "ts: methods"],
+      "note": "signal model() - two-way"
+    },
+    "selectedItem": {
+      "expected": 3,
+      "sources": ["template: interpolation", "ts: effect", "ts: selectItem"],
+      "note": "model with nullable type"
+    },
+    "firstName": {
+      "expected": 4,
+      "sources": ["template: interpolation", "ts: computed (fullName)", "ts: input binding", "ts: updateFirstName"],
+      "note": "signal used in computed"
+    },
+    "lastName": {
+      "expected": 4,
+      "sources": ["template: interpolation", "ts: computed (fullName)", "ts: input binding", "ts: updateLastName"],
+      "note": "signal used in computed"
+    },
+    "fullName": {
+      "expected": 3,
+      "sources": ["template: interpolation", "ts: effect", "ts: greeting computed"],
+      "note": "computed signal"
+    },
+    "isAdult": {
+      "expected": 2,
+      "sources": ["template: interpolation", "ts: greeting computed"],
+      "note": "computed signal"
+    },
+    "age": {
+      "expected": 3,
+      "sources": ["template: interpolation", "ts: computed (isAdult)", "ts: incrementAge"],
+      "note": "signal"
+    },
+    "items": {
+      "expected": 4,
+      "sources": ["template: @for", "ts: computed (itemCount)", "ts: addItem", "ts: removeItem"],
+      "note": "signal array"
+    },
+    "searchField": {
+      "expected": 2,
+      "sources": ["template: #search", "ts: accessViewChild"],
+      "note": "viewChild signal query"
+    },
+    "allItems": {
+      "expected": 4,
+      "sources": ["template: #signalItem (3x)", "ts: accessViewChildren"],
+      "note": "viewChildren signal query"
+    },
+    "greeting": {
+      "expected": 1,
+      "sources": ["template: interpolation"],
+      "note": "computed with multiple dependencies"
+    }
+  },
+
+  "template-patterns.component.ts": {
+    "simpleProperty": {
+      "expected": 3,
+      "sources": ["template: interpolation (2x)", "template: attr binding"],
+      "note": "simple property in various template contexts"
+    },
+    "methodCall": {
+      "expected": 1,
+      "sources": ["template: interpolation"],
+      "note": "method called in interpolation"
+    },
+    "nested": {
+      "expected": 2,
+      "sources": ["template: nested access (2x)"],
+      "note": "nested object property"
+    },
+    "condition": {
+      "expected": 2,
+      "sources": ["template: ternary", "template: @if"],
+      "note": "boolean condition"
+    },
+    "trueValue": {
+      "expected": 1,
+      "sources": ["template: ternary true branch"],
+      "note": "ternary value"
+    },
+    "falseValue": {
+      "expected": 1,
+      "sources": ["template: ternary false branch"],
+      "note": "ternary value"
+    },
+    "elementId": {
+      "expected": 1,
+      "sources": ["template: [id] binding"],
+      "note": "property binding"
+    },
+    "isActive": {
+      "expected": 4,
+      "sources": ["template: class binding", "template: style binding", "template: disabled binding", "template: hidden binding"],
+      "note": "boolean in multiple bindings"
+    },
+    "textColor": {
+      "expected": 1,
+      "sources": ["template: style binding"],
+      "note": "style binding"
+    },
+    "handleClick": {
+      "expected": 4,
+      "sources": ["template: event bindings (4x)"],
+      "note": "event handler method"
+    },
+    "onInput": {
+      "expected": 1,
+      "sources": ["template: (input) event"],
+      "note": "input event handler"
+    },
+    "onEnter": {
+      "expected": 1,
+      "sources": ["template: (keydown.enter)"],
+      "note": "keyboard event handler"
+    },
+    "twoWayValue": {
+      "expected": 2,
+      "sources": ["template: [(ngModel)]", "template: interpolation"],
+      "note": "two-way bound value"
+    },
+    "showContent": {
+      "expected": 3,
+      "sources": ["template: @if", "template: *ngIf", "template: hidden binding"],
+      "note": "condition in control flow"
+    },
+    "items": {
+      "expected": 4,
+      "sources": ["template: @for", "template: *ngFor", "template: length check", "template: pipe"],
+      "note": "array in loops"
+    },
+    "trackById": {
+      "expected": 2,
+      "sources": ["template: @for track", "template: *ngFor trackBy"],
+      "note": "track function"
+    },
+    "status": {
+      "expected": 2,
+      "sources": ["template: @switch", "template: [ngSwitch]"],
+      "note": "switch expression"
+    },
+    "activeLabel": {
+      "expected": 1,
+      "sources": ["template: @case"],
+      "note": "switch case content"
+    },
+    "firstName": {
+      "expected": 1,
+      "sources": ["template: @let expression"],
+      "note": "used in @let"
+    },
+    "lastName": {
+      "expected": 1,
+      "sources": ["template: @let expression"],
+      "note": "used in @let"
+    },
+    "dateValue": {
+      "expected": 2,
+      "sources": ["template: date pipe (2x)"],
+      "note": "value with date pipe"
+    },
+    "textValue": {
+      "expected": 3,
+      "sources": ["template: uppercase/lowercase/titlecase pipes"],
+      "note": "value with text pipes"
+    },
+    "asyncData$": {
+      "expected": 2,
+      "sources": ["template: async pipe (2x)"],
+      "note": "observable with async pipe"
+    },
+    "legacyCondition": {
+      "expected": 3,
+      "sources": ["template: *ngIf (3x)"],
+      "note": "legacy structural directive"
+    },
+    "legacyItems": {
+      "expected": 1,
+      "sources": ["template: *ngFor"],
+      "note": "legacy loop"
+    }
+  },
+
+  "parent.component.ts": {
+    "parentSimple": {
+      "expected": 3,
+      "sources": ["template: child bindings (3x)"],
+      "note": "used in multiple child component bindings"
+    },
+    "parentAliased": {
+      "expected": 1,
+      "sources": ["template: [aliasedName] binding"],
+      "note": "bound to aliased input"
+    },
+    "parentRequired": {
+      "expected": 3,
+      "sources": ["template: child bindings (3x)"],
+      "note": "required input binding"
+    },
+    "parentCount": {
+      "expected": 5,
+      "sources": ["template: two-way bindings (2x)", "template: expressions (2x)", "template: interpolation"],
+      "note": "model two-way binding"
+    },
+    "onSimpleOutput": {
+      "expected": 1,
+      "sources": ["template: (simpleOutput) handler"],
+      "note": "output event handler"
+    },
+    "onAliasedOutput": {
+      "expected": 1,
+      "sources": ["template: (aliasedEvent) handler"],
+      "note": "aliased output handler"
+    }
+  },
+
+  "child.component.ts": {
+    "simpleInput": {
+      "expected": 2,
+      "sources": ["parent: binding", "template: interpolation"],
+      "note": "@Input from parent"
+    },
+    "realInputName": {
+      "expected": 2,
+      "sources": ["parent: via 'aliasedName'", "template: interpolation"],
+      "alias": "aliasedName"
+    },
+    "requiredInput": {
+      "expected": 2,
+      "sources": ["parent: binding", "template: interpolation"],
+      "note": "required input"
+    },
+    "simpleOutput": {
+      "expected": 2,
+      "sources": ["parent: listener", "ts: emitSimple"],
+      "note": "@Output"
+    },
+    "realOutputName": {
+      "expected": 2,
+      "sources": ["parent: via 'aliasedEvent'", "ts: emitAliased"],
+      "alias": "aliasedEvent"
+    },
+    "signalInput": {
+      "expected": 2,
+      "sources": ["parent: binding", "template: interpolation"],
+      "note": "signal input"
+    },
+    "count": {
+      "expected": 3,
+      "sources": ["parent: two-way", "template: interpolation", "ts: incrementCount"],
+      "note": "model signal"
+    },
+    "childMethod": {
+      "expected": 1,
+      "sources": ["parent.ts: callChildMethod via ViewChild"],
+      "note": "method called from parent"
+    },
+    "privateChildMethod": {
+      "excluded": true,
+      "reason": "private method"
+    }
+  },
+
+  "data.service.ts": {
+    "items": {
+      "expected": 10,
+      "sources": ["ts: multiple method usages", "ts: computed signals", "ts: BehaviorSubject"],
+      "note": "signal used throughout service"
+    },
+    "currentUser": {
+      "expected": 4,
+      "sources": ["ts: computed signals (2x)", "ts: setCurrentUser", "ts: clearCurrentUser"],
+      "note": "user signal"
+    },
+    "isLoading": {
+      "expected": 1,
+      "sources": ["ts: setLoading"],
+      "note": "loading signal"
+    },
+    "itemCount": {
+      "expected": 0,
+      "sources": [],
+      "note": "computed - may not be used externally"
+    },
+    "activeItems": {
+      "expected": 0,
+      "sources": [],
+      "note": "computed - may not be used externally"
+    },
+    "fetchItems": {
+      "expected": 1,
+      "sources": ["ts: fetchItemById"],
+      "note": "called by another method"
+    },
+    "getItemById": {
+      "expected": 0,
+      "sources": [],
+      "note": "public method - refs from consumers"
+    },
+    "addItem": {
+      "expected": 0,
+      "sources": [],
+      "note": "public method - refs from consumers"
+    },
+    "internalMethod": {
+      "excluded": true,
+      "reason": "private method"
+    },
+    "_helperMethod": {
+      "excluded": true,
+      "reason": "underscore prefix - private convention"
+    }
+  }
+}

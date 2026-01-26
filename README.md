@@ -8,6 +8,7 @@ Display Angular template reference counts alongside TypeScript references in Neo
 - Uses Angular Language Service's TCB (Type-Check Block) for accurate template analysis
 - Highlights symbols with zero references to identify unused code
 - Configurable display format and position
+- Optional comprehensive mode for parent component usage tracking
 
 > **Note:** This plugin only activates for Angular projects (detected via Angular LSP attachment).
 > Non-Angular TypeScript files are unaffected.
@@ -31,8 +32,8 @@ export class MyComponent {
 ## Requirements
 
 - Neovim 0.9+
-- Angular Language Server (`angularls`)
-- A TypeScript LSP (ts_ls, typescript-tools, or vtsls)
+- Angular Language Server (`angularls` or `angular`)
+- A TypeScript LSP (see [Supported LSP Clients](#supported-lsp-clients))
 
 ## Installation
 
@@ -87,14 +88,15 @@ inputs.angular-refs-nvim.packages.${system}.default
 ```lua
 require("angular-refs").setup({
   enabled = true,
+  comprehensive_mode = false,  -- Enable parent component usage tracking (slower but more complete)
   display = {
     position = "eol",                  -- "eol" or "above"
-    separator = " ",                   -- Separator before text (e.g., " - ", " · ")
+    separator = " | ",                 -- Separator before text (e.g., " | ", " - ", " · ")
     format = "%d usages",              -- Format for 2+ references
     format_singular = "%d usage",      -- Format for 1 reference
     format_zero = "unused",            -- Format for zero references
     highlight = "Comment",             -- Highlight group for normal usages
-    zero_refs_highlight = "Comment",         -- Highlight for zero usages
+    zero_refs_highlight = "Comment",   -- Highlight for zero usages
   },
   trigger = {
     on_open = true,     -- Update on BufEnter
@@ -126,23 +128,92 @@ This plugin is **informational only** - it displays usage counts but doesn't ove
 1. Uses LSP `textDocument/documentSymbol` to find all symbols in TypeScript files
 2. Queries your TypeScript LSP for standard `textDocument/references`
 3. Queries Angular Language Server using `angular/getTcb` to analyze template references
-4. Displays combined counts as virtual text
+4. Parses Angular templates for additional references in control flow blocks
+5. Displays combined counts as virtual text
+
+When `comprehensive_mode` is enabled, the plugin also:
+- Searches parent component templates for usages of inputs/outputs
+- Tracks component selector usage across the project
+- Detects two-way binding (`[(prop)]`) and correctly counts both input and output
+
+Template caches are automatically invalidated when HTML files are saved.
 
 ## What's Tracked
 
-**Included:**
-- Class methods and properties (including lifecycle hooks)
-- Exported functions (utility files)
-- Exported constants
-- Enums
+### Signal-based APIs (Angular 16+)
 
-**Excluded:**
+- `signal()` - Basic signals
+- `input()` / `input.required()` - Signal inputs
+- `output()` - Signal outputs
+- `model()` - Two-way binding model (generates input + `Change` output)
+- `computed()` - Computed signals
+- `linkedSignal()` - Linked signals (Angular 19+)
+- `resource()` / `rxResource()` - Async resources (Angular 19+)
+- `viewChild()` / `viewChildren()` - View queries
+- `contentChild()` / `contentChildren()` - Content queries
+
+### Decorator-based APIs
+
+- `@Input()` / `@Output()` with alias support
+- `@ViewChild()` / `@ViewChildren()`
+- `@ContentChild()` / `@ContentChildren()`
+- `@HostBinding()` / `@HostListener()`
+- `host: {}` block in `@Component`
+
+### Other
+
+- Class methods and properties
+- Getters and setters
+- Exported functions and constants
+
+### Excluded
+
 - Constructors
-- Private members (prefixed with `_`)
+- Private members (prefixed with `_` or using `private` keyword)
 - Local variables inside methods
 - Interfaces (type-only, no runtime impact)
 
-**Note:** Lifecycle hooks (`ngOnInit`, etc.) may show high reference counts due to TypeScript LSP counting all interface implementations as references. This is a [known LSP limitation](https://github.com/microsoft/TypeScript/issues/61484).
+**Note:** Lifecycle hooks (`ngOnInit`, etc.) are excluded from display due to a [known LSP limitation](https://github.com/microsoft/TypeScript/issues/61484) where TypeScript counts all interface implementations as references.
+
+## Template Syntax Support
+
+### Modern Control Flow (Angular 17+)
+
+- `@if` / `@else if` / `@else` - Conditional blocks
+- `@for` - For loops with `track` expressions
+- `@switch` / `@case` / `@default` - Switch statements
+- `@let` - Local template variables
+- `@defer` - Deferred loading blocks
+
+### Legacy Directives
+
+- `*ngIf` - Structural if directive
+- `*ngFor` - Structural for directive with `trackBy` support
+- `[ngSwitch]` / `*ngSwitchCase` - Switch directive
+
+### Bindings
+
+- Interpolations: `{{ property }}`
+- Property bindings: `[property]="expression"`
+- Event bindings: `(event)="handler()"`
+- Two-way bindings: `[(ngModel)]="property"`
+- Pipe expressions: `{{ value | pipeName }}`
+- Async pipe: `{{ observable$ | async }}`
+
+## Supported LSP Clients
+
+### Angular
+
+- `angularls` (mason, lspconfig)
+- `angular` (alternative name)
+
+### TypeScript
+
+- `typescript-tools` (recommended)
+- `ts_ls` (nvim-lspconfig)
+- `vtsls`
+- `typescript-language-server`
+- `tsserver`
 
 ## Troubleshooting
 
@@ -158,6 +229,17 @@ The `angular/getTcb` request requires Angular LSP to be initialized:
 - Ensure your project has a valid `angular.json`
 - Angular LSP may need a moment to index on first open
 - Try `:AngularRefsDumpTcb` to verify TCB content is returned
+
+### Parent usages not counted
+
+Enable comprehensive mode in your config:
+```lua
+require("angular-refs").setup({
+  comprehensive_mode = true,
+})
+```
+
+Note: This mode performs project-wide searches and may be slower on large codebases.
 
 ## License
 

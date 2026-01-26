@@ -1,0 +1,96 @@
+<div class="signals-test">
+  <h2>Signals Test</h2>
+
+  <!-- Signal inputs -->
+  <section>
+    <h3>Signal Inputs</h3>
+    <p>Simple: {{ simpleInput() }}</p>
+    <p>Required: {{ requiredInput() }}</p>
+    <p>Aliased: {{ aliasedInput() }}</p>
+    <p>Transformed: {{ transformedInput() }}</p>
+    <p>With Default: {{ inputWithDefault() }}</p>
+    <p>Number: {{ numberInput() }}</p>
+  </section>
+
+  <!-- Regular signals -->
+  <section>
+    <h3>Regular Signals</h3>
+    <p>First Name: {{ firstName() }}</p>
+    <p>Last Name: {{ lastName() }}</p>
+    <p>Age: {{ age() }}</p>
+  </section>
+
+  <!-- Computed signals -->
+  <section>
+    <h3>Computed Signals</h3>
+    <p>Full Name: {{ fullName() }}</p>
+    <p>Is Adult: {{ isAdult() }}</p>
+    <p>Item Count: {{ itemCount() }}</p>
+    <p>Greeting: {{ greeting() }}</p>
+  </section>
+
+  <!-- Model signals -->
+  <section>
+    <h3>Model Signals</h3>
+    <p>Count: {{ count() }}</p>
+    <p>Double Count: {{ doubleCount() }}</p>
+    <p>Selected: {{ selectedItem()?.name }}</p>
+    <p>Toggle: {{ toggleState() }}</p>
+  </section>
+
+  <!-- Signal updates via methods -->
+  <section>
+    <h3>Signal Updates</h3>
+    <input #firstNameInput type="text" [value]="firstName()" (input)="updateFirstName(firstNameInput.value)">
+    <input #lastNameInput type="text" [value]="lastName()" (input)="updateLastName(lastNameInput.value)">
+    <button (click)="incrementAge()">Increment Age</button>
+    <button (click)="incrementCount()">+</button>
+    <button (click)="decrementCount()">-</button>
+    <button (click)="toggle()">Toggle</button>
+  </section>
+
+  <!-- Items list -->
+  <section>
+    <h3>Items</h3>
+    @for (item of items(); track item.id) {
+      <div>
+        <span>{{ item.name }}</span>
+        <button (click)="selectItem(item)">Select</button>
+        <button (click)="removeItem(item.id)">Remove</button>
+      </div>
+    }
+    <input #newItemInput type="text" placeholder="New item name">
+    <button (click)="addItem(newItemInput.value)">Add Item</button>
+  </section>
+
+  <!-- Output events -->
+  <section>
+    <h3>Outputs</h3>
+    <button #signalButton (click)="emitClick($event)">Emit Click</button>
+    <button #signalButton (click)="emitCustom()">Emit Custom</button>
+    <button #signalButton (click)="emitVoid()">Emit Void</button>
+  </section>
+
+  <!-- ViewChild references -->
+  <section>
+    <h3>ViewChild</h3>
+    <input #search type="text" placeholder="Search...">
+    <div #requiredElement>Required Element</div>
+    <ng-template #signalTemplate>
+      <p>Signal Template Content</p>
+    </ng-template>
+    <button (click)="accessViewChild()">Access ViewChild</button>
+  </section>
+
+  <!-- ViewChildren references -->
+  <section>
+    <h3>ViewChildren</h3>
+    <div #signalItem>Signal Item 1</div>
+    <div #signalItem>Signal Item 2</div>
+    <div #signalItem>Signal Item 3</div>
+    <button (click)="accessViewChildren()">Access ViewChildren</button>
+  </section>
+
+  <!-- Content projection -->
+  <ng-content select="[signalProjected]"></ng-content>
+</div>
