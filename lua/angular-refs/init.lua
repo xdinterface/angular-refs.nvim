@@ -39,7 +39,6 @@ function M.setup(opts)
       group = group,
       pattern = "*.ts",
       callback = function(args)
-        -- Only run for Angular projects
         if not has_angular_lsp(args.buf) then
           return
         end
@@ -58,7 +57,6 @@ function M.setup(opts)
       group = group,
       pattern = { "*.ts", "*.html" },
       callback = function(args)
-        -- Only run for Angular projects
         if not has_angular_lsp(args.buf) then
           return
         end

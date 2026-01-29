@@ -122,6 +122,21 @@ describe('angular-refs.server', function()
       assert.equals(1, symbols['prop5'] or 0)
     end)
 
+    it('should parse this.property at start of line', function()
+      local tcb = 'this.startOfLine;\n((this)).otherProp;'
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['startOfLine'] or 0)
+      assert.equals(1, symbols['otherProp'] or 0)
+    end)
+
+    it('should parse this.property at start of each line', function()
+      local tcb = 'this.first;\nthis.second;\nthis.third;'
+      local symbols = server.parse_tcb_symbols(tcb)
+      assert.equals(1, symbols['first'] or 0)
+      assert.equals(1, symbols['second'] or 0)
+      assert.equals(1, symbols['third'] or 0)
+    end)
+
     it('should handle method calls with parentheses', function()
       local tcb = [[
         ((this)).getData();
@@ -427,6 +442,86 @@ export class TestComponent {
       assert.equals('myProperty', decls[1].name)
       assert.equals(1, decls[1].line) -- 0-indexed, line 2 = index 1
       assert.is_true(decls[1].col >= 0)
+    end)
+
+    it('should find generic method declarations', function()
+      local content = [[
+export class TestComponent {
+  getData<T>(): T { return {} as T; }
+  fetchItems<T, U>(a: T): U { return {} as U; }
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['getData'] or false)
+      assert.is_true(names['fetchItems'] or false)
+    end)
+
+    it('should find constructor parameter properties', function()
+      local content = [[
+export class TestComponent {
+  constructor(public svc: Service, private priv: Other, readonly ro: Third) {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['svc'] or false)
+      assert.is_true(names['ro'] or false)
+      assert.is_falsy(names['priv'])
+    end)
+
+    it('should find protected constructor parameter properties', function()
+      local content = [[
+export class TestComponent {
+  constructor(protected router: Router) {}
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['router'] or false)
+    end)
+
+    it('should exclude underscore-prefixed private members', function()
+      local content = [[
+export class TestComponent {
+  publicProp = 'public';
+  _privateProp = 'private';
+  _anotherPrivate: string;
+}
+]]
+      local buf = helpers.create_buffer_with_content(content)
+      local decls = server.get_declarations_in_buffer(buf)
+      vim.api.nvim_buf_delete(buf, { force = true })
+
+      local names = {}
+      for _, d in ipairs(decls) do
+        names[d.name] = true
+      end
+
+      assert.is_true(names['publicProp'] or false)
+      assert.is_falsy(names['_privateProp'])
+      assert.is_falsy(names['_anotherPrivate'])
     end)
   end)
 
@@ -801,6 +896,49 @@ export class MyService {
       local symbols = server.parse_template_control_flow(content)
       assert.equals(1, symbols['count'] or 0)
       assert.equals(1, symbols['price'] or 0)
+    end)
+
+    it('should parse custom pipe names', function()
+      local content = '<p>{{ value | myCustomPipe | sortPipe }}</p>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['myCustomPipe'] or 0)
+      assert.equals(1, symbols['sortPipe'] or 0)
+    end)
+
+    it('should not parse built-in pipe names', function()
+      local content = '<p>{{ value | date | uppercase | async }}</p>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(0, symbols['date'] or 0)
+      assert.equals(0, symbols['uppercase'] or 0)
+      assert.equals(0, symbols['async'] or 0)
+    end)
+
+    it('should parse @defer with when condition', function()
+      local content = '@defer (when isReady) { <div></div> }'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['isReady'] or 0)
+    end)
+
+    it('should parse @defer with complex when condition', function()
+      local content = '@defer (when dataLoaded && userAuthenticated) { <div></div> }'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['dataLoaded'] or 0)
+      assert.equals(1, symbols['userAuthenticated'] or 0)
+    end)
+
+    it('should parse @case expressions', function()
+      local content = '@switch (s) { @case (StatusEnum.Active) { } }'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['StatusEnum'] or 0)
+    end)
+
+    it('should parse @case with multiple values', function()
+      local content = [[@switch (status) {
+        @case (Status.Active) { }
+        @case (Status.Pending) { }
+      }]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['Status'] or 0) >= 2)
     end)
   end)
 

@@ -19,7 +19,6 @@ function M.get_references(bufnr, line, col, callback, local_only)
     context = { includeDeclaration = false },
   }
 
-  -- Get TypeScript LSP client
   local server = require("angular-refs.server")
   local ts_client = nil
 

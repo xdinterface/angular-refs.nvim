@@ -87,7 +87,6 @@ function M.get_decorator_refs(bufnr, symbol_name)
       if next_line:match(symbol_name .. "%s*[=:;]") or next_line:match("get%s+" .. symbol_name) then
         count = count + 1
       end
-      -- Same line check
       if line:match(symbol_name .. "%s*[=:;]") or line:match("get%s+" .. symbol_name) then
         count = count + 1
       end
@@ -187,6 +186,41 @@ local function read_file(path)
   return content
 end
 
+---Extract bindings from tag content and update usage counts
+---@param tag_content string The tag attributes content
+---@param input_by_alias table<string, ComponentInput>
+---@param input_by_name table<string, ComponentInput>
+---@param output_by_alias table<string, ComponentOutput>
+---@param output_by_name table<string, ComponentOutput>
+---@param usage_counts table<string, number> Table to update with counts
+local function extract_bindings_from_tag(tag_content, input_by_alias, input_by_name, output_by_alias, output_by_name, usage_counts)
+  for binding_name in tag_content:gmatch("%[([a-zA-Z_][a-zA-Z0-9_]*)%]%s*=") do
+    local input = input_by_alias[binding_name] or input_by_name[binding_name]
+    if input then
+      usage_counts[input.name] = (usage_counts[input.name] or 0) + 1
+    end
+  end
+
+  for binding_name in tag_content:gmatch("%(([a-zA-Z_][a-zA-Z0-9_]*)%)%s*=") do
+    local output = output_by_alias[binding_name] or output_by_name[binding_name]
+    if output then
+      usage_counts[output.name] = (usage_counts[output.name] or 0) + 1
+    end
+  end
+
+  for binding_name in tag_content:gmatch("%[%(([a-zA-Z_][a-zA-Z0-9_]*)%)%]%s*=") do
+    local input = input_by_alias[binding_name] or input_by_name[binding_name]
+    if input then
+      usage_counts[input.name] = (usage_counts[input.name] or 0) + 1
+    end
+    local change_name = binding_name .. "Change"
+    local output = output_by_alias[change_name] or output_by_name[change_name]
+    if output then
+      usage_counts[output.name] = (usage_counts[output.name] or 0) + 1
+    end
+  end
+end
+
 ---@class ParentUsage
 ---@field file string Path to parent template
 ---@field binding string The binding name used (may be alias)
@@ -260,73 +294,14 @@ function M.find_selector_usages(selector, inputs, outputs, project_root)
         if cfg.debug then
           vim.notify("angular-refs: Found selector in " .. file_path, vim.log.levels.DEBUG)
         end
-
-        -- Extract all property bindings: [propName]="..." or [alias]="..."
-        for binding_name in tag_content:gmatch("%[([a-zA-Z_][a-zA-Z0-9_]*)%]%s*=") do
-          local input = input_by_alias[binding_name] or input_by_name[binding_name]
-          if input then
-            usage_counts[input.name] = (usage_counts[input.name] or 0) + 1
-          end
-        end
-
-        -- Extract event bindings: (eventName)="..." or (alias)="..."
-        for binding_name in tag_content:gmatch("%(([a-zA-Z_][a-zA-Z0-9_]*)%)%s*=") do
-          local output = output_by_alias[binding_name] or output_by_name[binding_name]
-          if output then
-            usage_counts[output.name] = (usage_counts[output.name] or 0) + 1
-          end
-        end
-
-        -- Extract two-way bindings: [(propName)]="..." or [(alias)]="..."
-        -- Two-way binding uses BOTH the input AND the corresponding Change output
-        for binding_name in tag_content:gmatch("%[%(([a-zA-Z_][a-zA-Z0-9_]*)%)%]%s*=") do
-          local input = input_by_alias[binding_name] or input_by_name[binding_name]
-          if input then
-            usage_counts[input.name] = (usage_counts[input.name] or 0) + 1
-          end
-          -- Two-way binding also uses the Change output
-          local change_name = binding_name .. "Change"
-          local output = output_by_alias[change_name] or output_by_name[change_name]
-          if output then
-            usage_counts[output.name] = (usage_counts[output.name] or 0) + 1
-          end
-        end
+        extract_bindings_from_tag(tag_content, input_by_alias, input_by_name, output_by_alias, output_by_name, usage_counts)
       end
 
-      -- Also handle self-closing tags: <selector />
       for tag_content in content:gmatch("<" .. escaped_selector .. "(%s[^/]*)/>") do
         if cfg.debug then
           vim.notify("angular-refs: Found self-closing selector in " .. file_path, vim.log.levels.DEBUG)
         end
-
-        -- Extract all property bindings: [propName]="..." or [alias]="..."
-        for binding_name in tag_content:gmatch("%[([a-zA-Z_][a-zA-Z0-9_]*)%]%s*=") do
-          local input = input_by_alias[binding_name] or input_by_name[binding_name]
-          if input then
-            usage_counts[input.name] = (usage_counts[input.name] or 0) + 1
-          end
-        end
-
-        -- Extract event bindings: (eventName)="..." or (alias)="..."
-        for binding_name in tag_content:gmatch("%(([a-zA-Z_][a-zA-Z0-9_]*)%)%s*=") do
-          local output = output_by_alias[binding_name] or output_by_name[binding_name]
-          if output then
-            usage_counts[output.name] = (usage_counts[output.name] or 0) + 1
-          end
-        end
-
-        -- Extract two-way bindings: [(propName)]="..." or [(alias)]="..."
-        for binding_name in tag_content:gmatch("%[%(([a-zA-Z_][a-zA-Z0-9_]*)%)%]%s*=") do
-          local input = input_by_alias[binding_name] or input_by_name[binding_name]
-          if input then
-            usage_counts[input.name] = (usage_counts[input.name] or 0) + 1
-          end
-          local change_name = binding_name .. "Change"
-          local output = output_by_alias[change_name] or output_by_name[change_name]
-          if output then
-            usage_counts[output.name] = (usage_counts[output.name] or 0) + 1
-          end
-        end
+        extract_bindings_from_tag(tag_content, input_by_alias, input_by_name, output_by_alias, output_by_name, usage_counts)
       end
 
       -- Handle tags with no attributes: <selector></selector>
@@ -404,6 +379,12 @@ function M.parse_tcb_symbols(tcb_content)
   -- Match this.xxx patterns (without parentheses)
   for symbol in tcb_content:gmatch("[^%w_]this%.([a-zA-Z_][a-zA-Z0-9_]*)") do
     symbols[symbol] = (symbols[symbol] or 0) + 1
+  end
+
+  -- Match this.xxx at start of string (the [^%w_] pattern above misses these)
+  local start_symbol = tcb_content:match("^this%.([a-zA-Z_][a-zA-Z0-9_]*)")
+  if start_symbol then
+    symbols[start_symbol] = (symbols[start_symbol] or 0) + 1
   end
 
   -- Legacy: Match ((_ctx).xxx) patterns - older Angular versions
@@ -511,11 +492,32 @@ function M.parse_template_control_flow(template_content)
     end
   end
 
+  -- Match @case expressions: @case (StatusEnum.Active)
+  for expr in template_content:gmatch("@case%s*%(([^%)]+)%)") do
+    for ref in expr:gmatch("([a-zA-Z_][a-zA-Z0-9_]*)") do
+      if not ref:match("^(true|false|null|undefined)$") then
+        add_symbol(ref)
+      end
+    end
+  end
+
   -- Match @let declarations: @let varName = expression
   for expr in template_content:gmatch("@let%s+[a-zA-Z_][a-zA-Z0-9_]*%s*=%s*([^;}{]+)") do
     for ref in expr:gmatch("([a-zA-Z_][a-zA-Z0-9_]*)") do
       if not ref:match("^(true|false|null|undefined)$") then
         add_symbol(ref)
+      end
+    end
+  end
+
+  -- Match @defer blocks: @defer (when isReady) { ... }
+  for expr in template_content:gmatch("@defer%s*%(([^%)]+)%)") do
+    local when_expr = expr:match("when%s+([^;%)]+)")
+    if when_expr then
+      for ref in when_expr:gmatch("([a-zA-Z_][a-zA-Z0-9_]*)") do
+        if not ref:match("^(true|false|null|undefined)$") then
+          add_symbol(ref)
+        end
       end
     end
   end
@@ -573,6 +575,18 @@ function M.parse_template_control_flow(template_content)
   -- Match async pipe: {{ observable$ | async }}
   for obs in template_content:gmatch("{{%s*([a-zA-Z_$][a-zA-Z0-9_$]*)%s*|%s*async") do
     add_symbol(obs)
+  end
+
+  -- Match custom pipe names: {{ value | myCustomPipe | sortPipe }}
+  local builtin_pipes = {
+    async = true, date = true, uppercase = true, lowercase = true,
+    titlecase = true, currency = true, number = true, percent = true,
+    json = true, slice = true, keyvalue = true,
+  }
+  for pipe_name in template_content:gmatch("|%s*([a-zA-Z_][a-zA-Z0-9_]*)") do
+    if not builtin_pipes[pipe_name] then
+      add_symbol(pipe_name)
+    end
   end
 
   return symbols
@@ -757,7 +771,6 @@ function M.parse_host_bindings(component_content)
 
   -- Match event bindings: '(click)': 'onClick($event)' or '(window:resize)': 'onResize($event)'
   for handler in host_block:gmatch("%'%(.-%)%'%s*:%s*%'([^%']+)%'") do
-    -- Extract method name
     local method = handler:match("([a-zA-Z_][a-zA-Z0-9_]*)%s*%(")
     if method then
       add_symbol(method)
@@ -973,7 +986,7 @@ local function filter_references(refs, declaration_uri, declaration_line)
   local count = 0
   for _, ref in ipairs(refs) do
     local ref_uri = ref.uri or (ref.targetUri)
-    local ref_line = ref.range and ref.range.start.line
+    local ref_line = ref.range and ref.range.start and ref.range.start.line
 
     if ref_uri and ref_line then
       local is_same_location = ref_uri == declaration_uri and ref_line == declaration_line
@@ -1039,13 +1052,41 @@ function M.get_declarations_in_buffer(bufnr)
     end
 
     if in_class and class_brace_depth > 0 then
-      -- Skip private members (private keyword or # prefix or _ prefix)
-      if line:match("^%s*private%s+") or line:match("^%s*#") then
+      -- Skip private members (private keyword, # prefix, or _ prefix convention)
+      if line:match("^%s*private%s+") or line:match("^%s*#") or line:match("^%s*_[a-zA-Z]") then
         goto continue
       end
 
-      -- Skip constructor parameters (handled separately in class analysis)
-      if line:match("^%s*constructor%s*%(") then
+      -- Parse constructor parameter properties (public/readonly/protected params become class properties)
+      local constructor_params = line:match("^%s*constructor%s*%((.*)%)")
+      if constructor_params then
+        for visibility, param_name in constructor_params:gmatch("(public%s+)([a-zA-Z_][a-zA-Z0-9_]*)") do
+          local col = line:find(param_name) - 1
+          table.insert(declarations, {
+            name = param_name,
+            line = line_0idx,
+            col = col,
+            kind = "parameter-property",
+          })
+        end
+        for visibility, param_name in constructor_params:gmatch("(readonly%s+)([a-zA-Z_][a-zA-Z0-9_]*)") do
+          local col = line:find(param_name) - 1
+          table.insert(declarations, {
+            name = param_name,
+            line = line_0idx,
+            col = col,
+            kind = "parameter-property",
+          })
+        end
+        for visibility, param_name in constructor_params:gmatch("(protected%s+)([a-zA-Z_][a-zA-Z0-9_]*)") do
+          local col = line:find(param_name) - 1
+          table.insert(declarations, {
+            name = param_name,
+            line = line_0idx,
+            col = col,
+            kind = "parameter-property",
+          })
+        end
         goto continue
       end
 
@@ -1064,8 +1105,9 @@ function M.get_declarations_in_buffer(bufnr)
       end
 
       -- Match method declarations: name(...) or async name(...) or get name() or set name(...)
-      local method_match = line:match("^%s*async%s+([a-zA-Z_][a-zA-Z0-9_]*)%s*%(")
-        or line:match("^%s*([a-zA-Z_][a-zA-Z0-9_]*)%s*%(")
+      -- Also handle generic methods: getData<T>()
+      local method_match = line:match("^%s*async%s+([a-zA-Z_][a-zA-Z0-9_]*)%s*[<%(]")
+        or line:match("^%s*([a-zA-Z_][a-zA-Z0-9_]*)%s*[<%(]")
         or line:match("^%s*get%s+([a-zA-Z_][a-zA-Z0-9_]*)%s*%(")
         or line:match("^%s*set%s+([a-zA-Z_][a-zA-Z0-9_]*)%s*%(")
 

@@ -30,7 +30,6 @@ local update_generation = {}
 local function get_symbols_async(bufnr, callback)
   local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
 
-  -- Get TypeScript LSP client
   local server = require("angular-refs.server")
   local ts_client = nil
   for _, name in ipairs(server.TS_CLIENT_NAMES) do
