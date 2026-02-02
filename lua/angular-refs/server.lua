@@ -427,6 +427,14 @@ function M.parse_template_control_flow(template_content)
     if prop then
       add_symbol(prop)
     end
+    -- Extract property references in ternary expressions: isOpen ? close() : open()
+    if handler:match("%?") then
+      for ref in handler:gmatch("([a-zA-Z_][a-zA-Z0-9_]*)") do
+        if not ref:match("^(true|false|null|undefined|event)$") then
+          add_symbol(ref)
+        end
+      end
+    end
   end
 
   -- Match property bindings: [property]="expression"
@@ -449,11 +457,36 @@ function M.parse_template_control_flow(template_content)
       end
       break -- Only get the first identifier (the root property)
     end
+    -- Also extract arguments from method calls: {{ method(arg1, arg2) }}
+    for args in expr:gmatch("[a-zA-Z_][a-zA-Z0-9_]*%s*%(([^%)]+)%)") do
+      for ref in args:gmatch("([a-zA-Z_][a-zA-Z0-9_]*)") do
+        if not ref:match("^(true|false|null|undefined|this)$") then
+          add_symbol(ref)
+        end
+      end
+    end
   end
 
   -- Match two-way bindings: [(ngModel)]="property" or [(model)]="property"
   for prop in template_content:gmatch("%[%([%w]+%)%]%s*=%s*\"([a-zA-Z_][a-zA-Z0-9_]*)\"") do
     add_symbol(prop)
+  end
+
+  -- Match object literals in property bindings: [ngClass]="{active: isActive, disabled: isDisabled}"
+  for obj_literal in template_content:gmatch('%[[%w%.%-]+%]%s*=%s*"{([^"]+)}"') do
+    for value in obj_literal:gmatch(":%s*([a-zA-Z_][a-zA-Z0-9_]*)") do
+      if not value:match("^(true|false|null|undefined)$") then
+        add_symbol(value)
+      end
+    end
+  end
+  -- Also handle single-quoted object literals
+  for obj_literal in template_content:gmatch("%[[%w%.%-]+%]%s*=%s*'{([^']+)}'") do
+    for value in obj_literal:gmatch(":%s*([a-zA-Z_][a-zA-Z0-9_]*)") do
+      if not value:match("^(true|false|null|undefined)$") then
+        add_symbol(value)
+      end
+    end
   end
 
   -- Match @for track expressions: @for (item of items; track trackFn(item))
@@ -576,6 +609,15 @@ function M.parse_template_control_flow(template_content)
   -- Match async pipe: {{ observable$ | async }}
   for obs in template_content:gmatch("{{%s*([a-zA-Z_$][a-zA-Z0-9_$]*)%s*|%s*async") do
     add_symbol(obs)
+  end
+
+  -- Match pipe arguments: {{ value | pipe:arg1:arg2 }}
+  for pipe_expr in template_content:gmatch("{{[^}]*|[^}]+}}") do
+    for arg in pipe_expr:gmatch(":([a-zA-Z_][a-zA-Z0-9_]*)") do
+      if not arg:match("^(true|false|null|undefined)$") then
+        add_symbol(arg)
+      end
+    end
   end
 
   -- Match custom pipe names: {{ value | myCustomPipe | sortPipe }}

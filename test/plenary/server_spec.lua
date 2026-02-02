@@ -940,6 +940,88 @@ export class MyService {
       local symbols = server.parse_template_control_flow(content)
       assert.is_true((symbols['Status'] or 0) >= 2)
     end)
+
+    it('should parse method arguments in interpolations', function()
+      local content = '{{ formatDate(startDate, endDate, locale) }}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['formatDate'] or 0)
+      assert.equals(1, symbols['startDate'] or 0)
+      assert.equals(1, symbols['endDate'] or 0)
+      assert.equals(1, symbols['locale'] or 0)
+    end)
+
+    it('should parse object literal values in ngClass', function()
+      local content = '<div [ngClass]="{active: isActive, disabled: isDisabled}"></div>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['isActive'] or 0) >= 1)
+      assert.is_true((symbols['isDisabled'] or 0) >= 1)
+    end)
+
+    it('should parse class binding expressions', function()
+      local content = '<div [class.active]="isSelected" [class.hidden]="!isVisible"></div>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['isSelected'] or 0)
+      assert.equals(1, symbols['isVisible'] or 0)
+    end)
+
+    it('should parse style binding expressions', function()
+      local content = '<div [style.backgroundColor]="bgColor" [style.width.px]="itemWidth"></div>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['bgColor'] or 0)
+      assert.equals(1, symbols['itemWidth'] or 0)
+    end)
+
+    it('should parse attr binding expressions', function()
+      local content = '<input [attr.data-id]="itemId" [attr.aria-label]="labelText">'
+      local symbols = server.parse_template_control_flow(content)
+      assert.equals(1, symbols['itemId'] or 0)
+      assert.equals(1, symbols['labelText'] or 0)
+    end)
+
+    it('should parse pipe arguments', function()
+      local content = '{{ items | slice:startIdx:endIdx }}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['items'] or 0) >= 1)
+      assert.is_true((symbols['startIdx'] or 0) >= 1)
+      assert.is_true((symbols['endIdx'] or 0) >= 1)
+    end)
+
+    it('should parse ternary in event handlers', function()
+      local content = '<button (click)="isOpen ? close() : open()"></button>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['isOpen'] or 0) >= 1)
+      assert.is_true((symbols['close'] or 0) >= 1)
+      assert.is_true((symbols['open'] or 0) >= 1)
+    end)
+
+    it('should parse nullish coalescing operator', function()
+      local content = '{{ userName ?? defaultName }}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['userName'] or 0) >= 1)
+      assert.is_true((symbols['defaultName'] or 0) >= 1)
+    end)
+
+    it('should parse logical operators in bindings', function()
+      local content = '<button [disabled]="isLoading || hasError || isEmpty"></button>'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['isLoading'] or 0) >= 1)
+      assert.is_true((symbols['hasError'] or 0) >= 1)
+      assert.is_true((symbols['isEmpty'] or 0) >= 1)
+    end)
+
+    it('should parse single-quoted object literals', function()
+      local content = [[<div [ngClass]='{"active": isActive}'></div>]]
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['isActive'] or 0) >= 1)
+    end)
+
+    it('should parse simple method call with multiple arguments', function()
+      local content = '{{ formatDate(startDate, endDate) }}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['formatDate'] or 0) >= 1)
+      assert.is_true((symbols['startDate'] or 0) >= 1)
+      assert.is_true((symbols['endDate'] or 0) >= 1)
+    end)
   end)
 
   describe('get_decorator_refs', function()
