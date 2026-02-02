@@ -103,6 +103,17 @@ require("angular-refs").setup({
     on_save = true,     -- Update on BufWritePost
     debounce_ms = 500,  -- Debounce time
   },
+  exclude = {
+    patterns = {                -- Lua patterns to exclude from counts
+      "node_modules",
+      "/dist/",
+      "%.angular",
+      "/build/",
+      "/coverage/",
+      "/__pycache__/",
+    },
+    respect_gitignore = true,   -- Also exclude gitignored files
+  },
   debug = false,
 })
 ```
@@ -174,6 +185,35 @@ Template caches are automatically invalidated when HTML files are saved.
 - Interfaces (type-only, no runtime impact)
 
 **Note:** Lifecycle hooks (`ngOnInit`, etc.) are excluded from display due to a [known LSP limitation](https://github.com/microsoft/TypeScript/issues/61484) where TypeScript counts all interface implementations as references.
+
+## Filtering
+
+By default, references from these locations are excluded from counts:
+- `node_modules/`
+- `dist/`, `build/`, `.angular/`
+- `coverage/`, `__pycache__/`
+- Any files matching your `.gitignore`
+
+### Custom Exclusions
+
+```lua
+require("angular-refs").setup({
+  exclude = {
+    patterns = { "node_modules", "vendor/", "my%-folder" },  -- Lua patterns
+    respect_gitignore = true,  -- Default: true
+  },
+})
+```
+
+To show all references (including gitignored files):
+
+```lua
+require("angular-refs").setup({
+  exclude = {
+    respect_gitignore = false,
+  },
+})
+```
 
 ## Template Syntax Support
 

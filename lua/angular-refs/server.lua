@@ -159,13 +159,14 @@ end
 ---@param root_path string Project root path
 ---@return string[] html_files List of HTML file paths
 local function find_html_files(root_path)
+  local filter = require("angular-refs.filter")
   local files = {}
 
   local glob_pattern = root_path .. "/**/*.html"
   local matches = vim.fn.glob(glob_pattern, false, true)
 
   for _, path in ipairs(matches) do
-    if not path:match("node_modules") and not path:match("dist/") and not path:match("%.angular/") then
+    if not filter.should_exclude(path) then
       table.insert(files, path)
     end
   end
@@ -973,7 +974,7 @@ function M.get_references_at_position(bufnr, line, col, callback)
   end, bufnr)
 end
 
----Filter references to exclude self-references and node_modules
+---Filter references to exclude self-references and excluded paths
 ---@param refs table[] LSP reference results
 ---@param declaration_uri string URI of the declaration file
 ---@param declaration_line number 0-indexed line of the declaration
@@ -983,6 +984,7 @@ local function filter_references(refs, declaration_uri, declaration_line)
     return 0
   end
 
+  local filter = require("angular-refs.filter")
   local count = 0
   for _, ref in ipairs(refs) do
     local ref_uri = ref.uri or (ref.targetUri)
@@ -990,9 +992,10 @@ local function filter_references(refs, declaration_uri, declaration_line)
 
     if ref_uri and ref_line then
       local is_same_location = ref_uri == declaration_uri and ref_line == declaration_line
-      local is_node_modules = ref_uri:match("node_modules")
+      local ref_path = vim.uri_to_fname(ref_uri)
+      local is_excluded = filter.should_exclude(ref_path)
 
-      if not is_same_location and not is_node_modules then
+      if not is_same_location and not is_excluded then
         count = count + 1
       end
     end
