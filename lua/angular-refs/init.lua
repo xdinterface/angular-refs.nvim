@@ -98,6 +98,15 @@ function M.setup(opts)
     end,
   })
 
+  -- Clear gitignore cache when .gitignore files change
+  vim.api.nvim_create_autocmd("BufWritePost", {
+    group = group,
+    pattern = ".gitignore",
+    callback = function()
+      require("angular-refs.filter").clear_cache()
+    end,
+  })
+
   vim.api.nvim_create_user_command("AngularRefsRefresh", function()
     local buf = vim.api.nvim_get_current_buf()
     require("angular-refs.display").update(buf)

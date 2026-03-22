@@ -162,6 +162,12 @@ function M.update(bufnr)
     return
   end
 
+  -- Skip files in excluded paths (node_modules, dist, gitignored, etc.)
+  local filter = require("angular-refs.filter")
+  if filter.should_exclude(filename) then
+    return
+  end
+
   -- Codelens pattern: prevent concurrent requests for same buffer
   if active_refreshes[bufnr] then
     return
@@ -327,6 +333,15 @@ end
 ---Schedule an update with debouncing
 ---@param bufnr number
 function M.schedule_update(bufnr)
+  -- Skip files in excluded paths
+  local filename = vim.api.nvim_buf_get_name(bufnr)
+  if filename ~= "" then
+    local filter = require("angular-refs.filter")
+    if filter.should_exclude(filename) then
+      return
+    end
+  end
+
   local cfg = require("angular-refs.config").get()
 
   if debounce_timers[bufnr] then

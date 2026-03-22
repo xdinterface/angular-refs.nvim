@@ -37,6 +37,7 @@ function M.get_references(bufnr, line, col, callback, local_only)
 
   ts_client.request("textDocument/references", params, function(err, result)
     local cfg = require("angular-refs.config").get()
+    local filter = require("angular-refs.filter")
 
     if err or not result then
       if cfg.debug then
@@ -61,9 +62,9 @@ function M.get_references(bufnr, line, col, callback, local_only)
       if uri and range then
         local file = vim.uri_to_fname(uri)
 
-        -- Skip node_modules (framework noise like Angular lifecycle hook calls)
+        -- Skip excluded paths (node_modules, dist, gitignored files, etc.)
         -- For local_only mode, also skip files that aren't the current file
-        local skip = file:match("node_modules")
+        local skip = filter.should_exclude(file)
         if local_only and file ~= current_file then
           skip = true
         end
@@ -92,7 +93,7 @@ function M.get_references(bufnr, line, col, callback, local_only)
     end
 
     if cfg.debug then
-      vim.notify("angular-refs: Line " .. line .. ": " .. #refs .. " refs (filtered " .. filtered_count .. " from node_modules)", vim.log.levels.DEBUG)
+      vim.notify("angular-refs: Line " .. line .. ": " .. #refs .. " refs (filtered " .. filtered_count .. " excluded)", vim.log.levels.DEBUG)
     end
 
     callback(refs)

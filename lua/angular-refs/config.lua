@@ -14,11 +14,16 @@ local M = {}
 ---@field on_save boolean Update on BufWritePost
 ---@field debounce_ms number Debounce time in milliseconds
 
+---@class AngularRefsExcludeConfig
+---@field patterns string[] Lua patterns to exclude from reference counts
+---@field respect_gitignore boolean Respect .gitignore files (default: true)
+
 ---@class AngularRefsConfig
 ---@field enabled boolean Enable the plugin
 ---@field comprehensive_mode boolean Enable WebStorm-style parent tracking (slower but more complete)
 ---@field display AngularRefsDisplayConfig Display configuration
 ---@field trigger AngularRefsTriggerConfig Trigger configuration
+---@field exclude AngularRefsExcludeConfig Exclusion patterns for filtering references
 ---@field debug boolean Enable debug logging
 
 ---@type AngularRefsConfig
@@ -38,6 +43,17 @@ M.defaults = {
     on_open = true,
     on_save = true,
     debounce_ms = 500,
+  },
+  exclude = {
+    patterns = {
+      "node_modules",
+      "/dist/",
+      "%.angular",
+      "/build/",
+      "/coverage/",
+      "/__pycache__/",
+    },
+    respect_gitignore = true,
   },
   debug = false,
 }
