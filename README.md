@@ -119,6 +119,7 @@ This plugin is **informational only** - it displays usage counts but doesn't ove
 | Command | Description |
 |---------|-------------|
 | `:AngularRefsRefresh` | Manually refresh reference counts |
+| `:AngularRefsToggle` | Toggle reference counts on/off |
 | `:AngularRefsUnused` | List all unused symbols in quickfix |
 | `:AngularRefsStatus` | Show Angular LSP status |
 | `:AngularRefsDumpTcb` | Dump raw TCB content (for debugging) |
@@ -173,7 +174,7 @@ Template caches are automatically invalidated when HTML files are saved.
 - Local variables inside methods
 - Interfaces (type-only, no runtime impact)
 
-**Note:** Lifecycle hooks (`ngOnInit`, etc.) are excluded from display due to a [known LSP limitation](https://github.com/microsoft/TypeScript/issues/61484) where TypeScript counts all interface implementations as references.
+**Note:** Lifecycle hooks (`ngOnInit`, etc.) use local-only reference counting due to a [known LSP limitation](https://github.com/microsoft/TypeScript/issues/61484) where TypeScript counts all interface implementations project-wide. Only references within the same file are counted.
 
 ## Template Syntax Support
 
