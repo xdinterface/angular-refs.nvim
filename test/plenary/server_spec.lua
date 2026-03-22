@@ -1022,6 +1022,44 @@ export class MyService {
       assert.is_true((symbols['startDate'] or 0) >= 1)
       assert.is_true((symbols['endDate'] or 0) >= 1)
     end)
+
+    it('should parse @for with method call collection', function()
+      local content = '@for (item of getItems(); track item.id) {\n  <div>{{ item.name }}</div>\n}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['getItems'] or 0) >= 1)
+    end)
+
+    it('should only extract root identifier from @case with property access', function()
+      local content = '@switch (status) {\n  @case (StatusEnum.Active) {\n    <span>Active</span>\n  }\n}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['StatusEnum'] or 0) >= 1)
+      assert.is_nil(symbols['Active'])
+    end)
+
+    it('should parse @case with simple identifier', function()
+      local content = '@switch (mode) {\n  @case (ViewMode) {\n    <span>View</span>\n  }\n}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['ViewMode'] or 0) >= 1)
+    end)
+
+    it('should parse optional chaining in interpolations', function()
+      local content = '{{ foo?.bar }}'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['foo'] or 0) >= 1)
+    end)
+
+    it('should parse @let with method call expression', function()
+      local content = '@let result = computeValue(inputData);'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['computeValue'] or 0) >= 1)
+      assert.is_true((symbols['inputData'] or 0) >= 1)
+    end)
+
+    it('should parse two-way binding with simple property', function()
+      local content = '<input [(ngModel)]="username">'
+      local symbols = server.parse_template_control_flow(content)
+      assert.is_true((symbols['username'] or 0) >= 1)
+    end)
   end)
 
   describe('get_decorator_refs', function()

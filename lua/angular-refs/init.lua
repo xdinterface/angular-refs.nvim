@@ -2,14 +2,10 @@ local M = {}
 
 local config = require("angular-refs.config")
 
----Check if a file is a spec/test file
----@param filename string
----@return boolean
 local function is_spec_file(filename)
   return filename:match("%.spec%.ts$") or filename:match("%.test%.ts$")
 end
 
----Check if Angular LSP is attached to this buffer
 ---@param bufnr number
 ---@return boolean
 local function has_angular_lsp(bufnr)
@@ -27,10 +23,6 @@ end
 function M.setup(opts)
   config.setup(opts)
 
-  if not config.get().enabled then
-    return
-  end
-
   local group = vim.api.nvim_create_augroup("AngularRefs", { clear = true })
   local cfg = config.get()
 
@@ -39,14 +31,10 @@ function M.setup(opts)
       group = group,
       pattern = "*.ts",
       callback = function(args)
-        if not has_angular_lsp(args.buf) then
-          return
-        end
-        -- Skip spec/test files
+        if not config.is_enabled() then return end
+        if not has_angular_lsp(args.buf) then return end
         local filename = vim.api.nvim_buf_get_name(args.buf)
-        if is_spec_file(filename) then
-          return
-        end
+        if is_spec_file(filename) then return end
         require("angular-refs.display").schedule_update(args.buf)
       end,
     })
@@ -57,18 +45,15 @@ function M.setup(opts)
       group = group,
       pattern = { "*.ts", "*.html" },
       callback = function(args)
-        if not has_angular_lsp(args.buf) then
-          return
-        end
+        if not config.is_enabled() then return end
+        if not has_angular_lsp(args.buf) then return end
 
         local filename = vim.api.nvim_buf_get_name(args.buf)
 
         if filename:match("%.html$") then
-          -- Template changed - notify server to invalidate caches
           local server = require("angular-refs.server")
           server.invalidate(filename)
           server.invalidate_parent_cache(filename)
-          -- Update all open TS buffers that might reference this template
           for _, buf in ipairs(vim.api.nvim_list_bufs()) do
             if vim.api.nvim_buf_is_loaded(buf) and has_angular_lsp(buf) then
               local bufname = vim.api.nvim_buf_get_name(buf)
@@ -78,7 +63,6 @@ function M.setup(opts)
             end
           end
         else
-          -- TS file changed - invalidate cache and refresh
           if not is_spec_file(filename) then
             require("angular-refs.server").invalidate(args.buf)
             require("angular-refs.display").schedule_update(args.buf)
@@ -88,27 +72,22 @@ function M.setup(opts)
     })
   end
 
-  -- Refresh on cursor idle or leaving insert mode (codelens pattern)
   vim.api.nvim_create_autocmd({ "CursorHold", "InsertLeave" }, {
     group = group,
     pattern = "*.ts",
     callback = function(args)
-      -- Only run for Angular projects
-      if not has_angular_lsp(args.buf) then
-        return
-      end
+      if not config.is_enabled() then return end
+      if not has_angular_lsp(args.buf) then return end
       local filename = vim.api.nvim_buf_get_name(args.buf)
-      if is_spec_file(filename) then
-        return
-      end
+      if is_spec_file(filename) then return end
       require("angular-refs.display").schedule_update(args.buf)
     end,
   })
 
-  -- Trigger update when Angular LSP attaches (handles async LSP startup)
   vim.api.nvim_create_autocmd("LspAttach", {
     group = group,
     callback = function(args)
+      if not config.is_enabled() then return end
       local client = vim.lsp.get_client_by_id(args.data.client_id)
       if client and vim.tbl_contains(require("angular-refs.server").ANGULAR_CLIENT_NAMES, client.name) then
         local bufname = vim.api.nvim_buf_get_name(args.buf)
@@ -160,8 +139,22 @@ function M.setup(opts)
     vim.fn.setqflist(qf_items)
     vim.cmd("copen")
   end, { desc = "List all unused symbols in quickfix" })
-end
 
-M.config = config.get
+  vim.api.nvim_create_user_command("AngularRefsToggle", function()
+    local c = config.get()
+    c.enabled = not c.enabled
+    if c.enabled then
+      vim.notify("Angular refs: enabled", vim.log.levels.INFO)
+    else
+      local display = require("angular-refs.display")
+      for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_loaded(buf) then
+          display.clear(buf)
+        end
+      end
+      vim.notify("Angular refs: disabled", vim.log.levels.INFO)
+    end
+  end, { desc = "Toggle Angular reference counts on/off" })
+end
 
 return M

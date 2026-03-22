@@ -497,9 +497,12 @@ function M.parse_template_control_flow(template_content)
     end
   end
 
-  -- Match @for collection: @for (item of collection; ...)
+  -- Match @for collection: @for (item of collection; ...) or @for (item of getItems(); ...)
   for collection in template_content:gmatch("@for%s*%([^%)]+%s+of%s+([a-zA-Z_][a-zA-Z0-9_]*)") do
     add_symbol(collection)
+  end
+  for method in template_content:gmatch("@for%s*%([^%)]+%s+of%s+([a-zA-Z_][a-zA-Z0-9_]*)%s*%(") do
+    add_symbol(method)
   end
 
   -- Match @if/@else if conditions
@@ -525,12 +528,11 @@ function M.parse_template_control_flow(template_content)
     end
   end
 
-  -- Match @case expressions: @case (StatusEnum.Active)
+  -- Match @case expressions: @case (StatusEnum.Active) - only extract root identifier
   for expr in template_content:gmatch("@case%s*%(([^%)]+)%)") do
-    for ref in expr:gmatch("([a-zA-Z_][a-zA-Z0-9_]*)") do
-      if not ref:match("^(true|false|null|undefined)$") then
-        add_symbol(ref)
-      end
+    local root = expr:match("([a-zA-Z_][a-zA-Z0-9_]*)")
+    if root and not root:match("^(true|false|null|undefined)$") then
+      add_symbol(root)
     end
   end
 
@@ -1394,13 +1396,6 @@ function M.invalidate(bufnr)
     tcb_cache[bufnr] = nil
     refs_cache[bufnr] = nil
   end
-end
-
----Clear entire cache
-function M.clear_cache()
-  tcb_cache = {}
-  refs_cache = {}
-  parent_usage_cache = {}
 end
 
 ---Invalidate parent usage cache (call when HTML files change)
