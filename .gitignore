@@ -22,6 +22,7 @@ Thumbs.db
 
 # Build artifacts
 *.tsbuildinfo
+.test-deps/
 
 # Claude Code
 .claude/

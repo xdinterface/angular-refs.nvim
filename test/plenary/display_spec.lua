@@ -1,108 +1,108 @@
-local config = require('angular-refs.config')
-local display = require('angular-refs.display')
-local lsp = require('angular-refs.lsp')
-local server = require('angular-refs.server')
+local config = require("angular-refs.config")
+local display = require("angular-refs.display")
+local analysis = require("angular-refs.analysis")
 
-describe('angular-refs refresh orchestration', function()
-  local bufnr, originals, callbacks, template_calls, template_callback, rendered
-
-  local function replace(module, key, value)
-    table.insert(originals, { module, key, module[key] })
-    module[key] = value
-  end
-
-  before_each(function()
-    originals, callbacks, rendered = {}, {}, {}
-    template_calls, template_callback = 0, nil
-    config.setup({ exclude = { respect_gitignore = false } })
-    bufnr = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_name(bufnr, vim.fn.tempname() .. '.ts')
-    replace(vim, 'defer_fn', function() end)
-    replace(lsp, 'get_symbols', function(_, callback)
-      callback({
-        { name = 'save', line = 0, col = 2, kind = 'Method' },
-        { name = 'title', line = 1, col = 2, kind = 'Property' },
-        { name = 'ngOnInit', line = 2, col = 2, kind = 'Method' },
-      })
-    end)
-    replace(server, 'get_all_template_symbols', function(_, callback)
-      template_calls = template_calls + 1
-      template_callback = callback
-    end)
-    replace(server, 'get_decorator_refs', function(_, name)
-      return name == 'save' and 1 or 0
-    end)
-    replace(lsp, 'get_references', function(_, line, _, callback, local_only)
-      callbacks[line] = { callback = callback, local_only = local_only }
-    end)
-    replace(display, 'render_results', function(_, results)
-      table.insert(rendered, results)
-    end)
-  end)
-
-  after_each(function()
-    display.clear(bufnr)
-    vim.api.nvim_buf_delete(bufnr, { force = true })
-    for i = #originals, 1, -1 do
-      local entry = originals[i]
-      entry[1][entry[2]] = entry[3]
-    end
-    config.setup()
-  end)
-
-  it('shares template analysis and renders once after out-of-order TS responses', function()
-    display.update(bufnr)
-    assert.equals(1, template_calls)
-    assert.equals(0, #rendered)
-    template_callback({ save = 2, title = 3, ngOnInit = 99 })
-    assert.is_false(callbacks[0].local_only)
-    assert.is_false(callbacks[1].local_only)
-    assert.is_true(callbacks[2].local_only)
-    callbacks[1].callback({ {}, {} })
-    callbacks[2].callback({ {} })
-    assert.equals(0, #rendered)
-    callbacks[0].callback({ {} })
-    assert.equals(1, #rendered)
-    assert.equals(1, rendered[1][0].ts_count)
-    assert.equals(3, rendered[1][0].template_count)
-    assert.equals(2, rendered[1][1].ts_count)
-    assert.equals(3, rendered[1][1].template_count)
-    assert.equals(1, rendered[1][2].ts_count)
-    assert.equals(0, rendered[1][2].template_count)
-  end)
-
-  it('skips template analysis for buffers containing only lifecycle hooks', function()
-    replace(lsp, 'get_symbols', function(_, callback)
-      callback({ { name = 'ngOnInit', line = 0, col = 2, kind = 'Method' } })
-    end)
-    display.update(bufnr)
-    assert.equals(0, template_calls)
-    assert.is_true(callbacks[0].local_only)
-    callbacks[0].callback({})
-    assert.equals(1, #rendered)
-    assert.equals(0, rendered[1][0].template_count)
-  end)
-
-  it('completes with empty template results and permits the next refresh', function()
-    display.update(bufnr)
-    template_callback({})
-    for _, entry in pairs(callbacks) do entry.callback({}) end
-    assert.equals(1, #rendered)
-    display.update(bufnr)
-    assert.equals(2, template_calls)
-  end)
-
-  it('preserves the separate comprehensive counting path', function()
-    config.get().comprehensive_mode = true
-    replace(server, 'get_comprehensive_counts', function(_, callback)
-      callback({ save = 4, title = 5 })
-    end)
-    display.update(bufnr)
-    assert.equals(0, template_calls)
-    assert.same({}, callbacks)
-    assert.equals(1, #rendered)
-    assert.equals(4, rendered[1][0].template_count)
-    assert.equals(5, rendered[1][1].template_count)
-    assert.equals(0, rendered[1][2].template_count)
-  end)
+describe("refresh lifecycle", function()
+	local buf, original_run, original_start, original_stop, callbacks, timer_callbacks
+	before_each(function()
+		config.setup({ exclude = { respect_gitignore = false } })
+		buf = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_buf_set_name(buf, vim.fn.tempname() .. ".ts")
+		original_run, original_start, original_stop = analysis.run, vim.fn.timer_start, vim.fn.timer_stop
+		callbacks, timer_callbacks = {}, {}
+		analysis.run = function(_, group, callback)
+			table.insert(callbacks, { group = group, done = callback })
+		end
+		vim.fn.timer_start = function(_, callback)
+			table.insert(timer_callbacks, callback)
+			return #timer_callbacks
+		end
+		vim.fn.timer_stop = function() end
+	end)
+	after_each(function()
+		display.clear(buf)
+		analysis.run, vim.fn.timer_start, vim.fn.timer_stop = original_run, original_start, original_stop
+		vim.api.nvim_buf_delete(buf, { force = true })
+		config.setup()
+	end)
+	it("cancels and ignores late results after clear", function()
+		display.update(buf)
+		display.clear(buf)
+		assert.is_true(callbacks[1].group.cancelled)
+		callbacks[1].done({ results = {}, state = "complete" })
+		assert.is_nil(display.get_report(buf))
+	end)
+	it("queues a refresh requested during an active run", function()
+		display.update(buf)
+		display.update(buf)
+		assert.equals(1, #callbacks)
+		callbacks[1].done({ results = {}, state = "complete" })
+		timer_callbacks[2]()
+		vim.wait(100, function()
+			return #callbacks == 2
+		end)
+		assert.equals(2, #callbacks)
+	end)
+	it("does not publish results for an older buffer revision", function()
+		display.update(buf)
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "changed" })
+		callbacks[1].done({ results = {}, state = "complete" })
+		assert.not_equals("complete", display.get_report(buf).state)
+	end)
+	it("times out even before symbol discovery responds", function()
+		display.update(buf)
+		timer_callbacks[1]()
+		vim.wait(100, function()
+			return callbacks[1].group.cancelled
+		end)
+		assert.equals("incomplete", display.get_report(buf).state)
+		assert.same({}, display.get_unused(buf))
+	end)
+	it("does not start work when disabled", function()
+		config.get().enabled = false
+		display.update(buf)
+		assert.equals(0, #callbacks)
+	end)
+	it("ignores a queued timeout after a successful response", function()
+		display.update(buf)
+		timer_callbacks[1]()
+		callbacks[1].done({ results = {}, state = "complete" })
+		vim.wait(30, function()
+			return false
+		end)
+		assert.equals("complete", display.get_report(buf).state)
+	end)
+	it("reuses fresh unchanged results for automatic triggers", function()
+		display.update(buf)
+		callbacks[1].done({ results = {}, state = "complete" })
+		display.schedule_update(buf)
+		assert.equals(1, #timer_callbacks)
+	end)
+	it("does not restart from a scheduled debounce callback after clear", function()
+		display.schedule_update(buf)
+		timer_callbacks[1]()
+		display.clear(buf)
+		vim.wait(30, function()
+			return false
+		end)
+		assert.equals(0, #callbacks)
+	end)
+	it("distinguishes unanalysed buffers from no unused symbols", function()
+		local _, state = display.get_unused(buf)
+		assert.equals("not analyzed", state)
+	end)
+	it("renders both declarations on one line with names", function()
+		local report = {
+			results = {
+				{ symbol = { name = "a", line = 0, col = 0 }, count = 2, state = "incomplete" },
+				{ symbol = { name = "b", line = 0, col = 5 }, count = 0, state = "incomplete" },
+			},
+		}
+		display.render_results(buf, report)
+		local marks =
+			vim.api.nvim_buf_get_extmarks(buf, vim.api.nvim_create_namespace("angular-refs"), 0, -1, { details = true })
+		assert.equals(1, #marks)
+		assert.equals(" | a: 2 usages (incomplete)", marks[1][4].virt_text[1][1])
+		assert.equals(" | b: unknown", marks[1][4].virt_text[2][1])
+	end)
 end)

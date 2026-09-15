@@ -1,0 +1,10 @@
+<button (click)="save()">{{ title }}</button>
+<input [(ngModel)]="twoWayValue">
+{{ twoWayValue }}
+{{ asyncData$ | async }}
+{{ asyncData$ | async }}
+@if (visible) { {{ title }} }
+@for (item of getItems(); track item) { {{ item }} }
+<test-child [publicName]="title" [signalAlias]="title" [(value)]="twoWayValue" />
+<ng-template let-title>{{ title }}</ng-template>
+<span>{{ 'title save asyncData$' }}</span>

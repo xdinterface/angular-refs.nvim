@@ -1,0 +1,59 @@
+name: Reference analysis
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  references:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        angular: ['21', '22']
+        neovim: ['0.11.5', '0.12.5']
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      - uses: actions/checkout@v7
+        with:
+          repository: nvim-lua/plenary.nvim
+          ref: 74b06c6c75e4eeb3108ec01852001636d85a932b
+          path: .test-deps/plenary
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: pmizio/typescript-tools.nvim
+          ref: c2f5910074103705661e9651aa841e0d7eea9932
+          path: .test-deps/typescript-tools
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: tree-sitter/tree-sitter-typescript
+          ref: 75b3874edb2dc714fb1fd77a32013d0f8699989f
+          path: .test-deps/typescript-grammar
+          persist-credentials: false
+      - name: Install Neovim and compile the optional parser
+        env:
+          NVIM_VERSION: ${{ matrix.neovim }}
+        run: |
+          curl --fail --location "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-x86_64.tar.gz" -o "$RUNNER_TEMP/nvim.tar.gz"
+          tar -xzf "$RUNNER_TEMP/nvim.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+          cc -O2 -shared -fPIC -I.test-deps/typescript-grammar/typescript/src .test-deps/typescript-grammar/typescript/src/parser.c .test-deps/typescript-grammar/typescript/src/scanner.c -o "$RUNNER_TEMP/typescript.so"
+          echo "AR_TS_PARSER=$RUNNER_TEMP/typescript.so" >> "$GITHUB_ENV"
+          echo "AR_TS_TOOLS=$GITHUB_WORKSPACE/.test-deps/typescript-tools" >> "$GITHUB_ENV"
+          echo "PLENARY_PATH=$GITHUB_WORKSPACE/.test-deps/plenary" >> "$GITHUB_ENV"
+      - name: Unit regressions
+        run: make test
+      - name: Real-server regressions
+        env:
+          ANGULAR_MAJOR: ${{ matrix.angular }}
+        run: |
+          fixture_dir=$(node test/live/prepare.mjs "$ANGULAR_MAJOR")
+          npm install --prefix "$fixture_dir" --ignore-scripts --no-audit --no-fund
+          node test/live/matrix.mjs "$fixture_dir"

@@ -1,311 +1,183 @@
 # angular-refs.nvim
 
-Display Angular template reference counts alongside TypeScript references in Neovim.
+Source-based TypeScript and Angular template usage counts for Neovim.
 
-## Features
-
-- Shows combined reference counts from TypeScript and Angular templates as virtual text
-- Uses Angular Language Service's TCB (Type-Check Block) for accurate template analysis
-- Highlights symbols with zero references to identify unused code
-- Configurable display format and position
-- Optional comprehensive mode for parent component usage tracking
-
-> **Note:** This plugin only activates for Angular projects (detected via Angular LSP attachment).
-> Non-Angular TypeScript files are unaffected.
-
-## Example
-
-```typescript
-export class MyComponent {
-  userName: string;          // 3 usages
-
-  getData() {                // 5 usages
-    // ...
-  }
-
-  unusedMethod() {           // unused
-    // ...
-  }
-}
-```
+The plugin combines references from your existing TypeScript and Angular language
+servers, deduplicates source locations, and checks which declaration each reference
+belongs to. It does not count occurrences in compiler-generated template code.
 
 ## Requirements
 
-- Neovim 0.9+
-- Angular Language Server (`angularls` or `angular`)
-- A TypeScript LSP (see [Supported LSP Clients](#supported-lsp-clients))
+- Neovim 0.11 or 0.12.
+- Angular 21 or 22, with a matching Angular language server (`angularls` or `angular`).
+- A TypeScript provider: `typescript-tools`, `ts_ls` / `typescript-language-server`,
+  or `vtsls`. The legacy client name `tsserver` is also recognized.
+- Recommended: an installed **TypeScript Tree-sitter parser**. It supplies declaration,
+  arrow-function and framework-hook evidence. The plugin does not install parsers.
+
+There is no Node helper to install for this plugin. Your language servers retain
+their usual Node/TypeScript requirements. See [Angular version compatibility](https://angular.dev/reference/versions).
 
 ## Installation
 
-### lazy.nvim
+For lazy.nvim:
 
 ```lua
 {
-  "xdinterface/angular-refs.nvim",
-  ft = { "typescript" },
+  'xdinterface/angular-refs.nvim',
+  ft = 'typescript',
   opts = {},
 }
 ```
 
-### packer.nvim
+With another package manager, load the plugin and call:
 
 ```lua
-use {
-  "xdinterface/angular-refs.nvim",
-  ft = { "typescript" },
-  config = function()
-    require("angular-refs").setup()
-  end,
-}
+require('angular-refs').setup()
 ```
 
-### vim-plug
+Automatic display is restricted to TypeScript buffers attached to Angular LSP.
+Spec/test files are not annotated, but references from tests still count.
 
-```vim
-Plug 'xdinterface/angular-refs.nvim'
-```
+## What the counts mean
 
-Then in your config:
-```lua
-require("angular-refs").setup()
-```
+A usage is a **source occurrence**, not the number of times a function runs.
+Callbacks count once per source reference; a two-way binding counts once per
+referenced symbol, not once for each generated read/write check.
 
-### Nix Flakes
+Counts belong to the specific member implementation. A call to `service.save()`
+does not count toward a component's unrelated `save()`. References returned for
+an entire interface/override family are checked against their definitions.
+Unresolved dispatch is not credited as a confirmed implementation usage.
 
-```nix
-{
-  inputs.angular-refs-nvim.url = "github:xdinterface/angular-refs.nvim";
-}
-```
+Both external and inline templates use Angular's source mappings. Aliased
+inputs, signal inputs, parent bindings, control-flow expressions and host
+expressions are handled through the language server, not HTML regular expressions.
+Overloads and getter/setter pairs are grouped by their owning member. Different
+members on one line are displayed separately with their names.
 
-Add to your Neovim plugins:
-```nix
-inputs.angular-refs-nvim.packages.${system}.default
-```
+### Incomplete results and unused detection
+
+| Display | Meaning |
+| --- | --- |
+| `3 usages (incomplete)` | Three confirmed source occurrences; additional usages cannot be ruled out. |
+| `unknown` | No confirmed references, but insufficient evidence to claim the symbol is unused. |
+| `unused` | Reserved for a complete, eligible zero-reference analysis. |
+
+**Current limitation:** standard reference APIs do not establish whole-workspace
+project coverage. This version therefore marks results incomplete and does **not**
+emit `unused` for ordinary zero-reference results. A successful empty LSP response
+is not a dead-code proof. No option silently opts out of this safety rule.
+
+Dynamic property access, external consumers, unsupported syntax, missing servers
+and ambiguous ownership can all leave gaps. Tree-sitter helps classify declarations
+and framework entry points; it does not provide a whole-program reachability proof.
+Cross-file inheritance and custom framework registration remain conservative gaps.
+
+Recognized Angular lifecycle hooks have no numeric label and never enter unused
+results. Recognition uses Angular imports/decorators and resolvable same-file
+inheritance, not method names alone. Without sufficient syntax evidence, the plugin
+withholds that classification. Explicit references remain available through normal
+LSP navigation.
+
+Host listeners, inputs/outputs, signal factories, queries, pipe transforms and
+recognized value-accessor callbacks carry framework-use evidence. The plugin does
+not invent numeric usages for framework invocation or population.
 
 ## Configuration
 
 ```lua
-require("angular-refs").setup({
+require('angular-refs').setup({
   enabled = true,
-  comprehensive_mode = false,  -- Enable parent component usage tracking (slower but more complete)
+  analysis = {
+    timeout_ms = 10000,          -- Whole refresh, including symbol discovery
+    max_concurrent_requests = 4, -- Per provider within a refresh
+  },
   display = {
-    position = "eol",                  -- "eol" or "above"
-    separator = " | ",                 -- Separator before text (e.g., " | ", " - ", " · ")
-    format = "%d usages",              -- Format for 2+ references
-    format_singular = "%d usage",      -- Format for 1 reference
-    format_zero = "unused",            -- Format for zero references
-    highlight = "Comment",             -- Highlight group for normal usages
-    zero_refs_highlight = "Comment",   -- Highlight for zero usages
+    position = 'eol',           -- 'eol' or 'above'
+    separator = ' | ',
+    format = '%d usages',
+    format_singular = '%d usage',
+    format_zero = 'unused',
+    format_unknown = 'unknown',
+    format_incomplete = '%d usages (incomplete)',
+    highlight = 'Comment',
+    zero_refs_highlight = 'Comment',
   },
   trigger = {
-    on_open = true,     -- Update on BufEnter
-    on_save = true,     -- Update on BufWritePost
-    debounce_ms = 500,  -- Debounce time
+    on_open = true,
+    on_save = true,
+    debounce_ms = 500,
   },
   exclude = {
-    patterns = {                -- Lua patterns to exclude from counts
-      "node_modules",
-      "/dist/",
-      "%.angular",
-      "/build/",
-      "/coverage/",
-      "/__pycache__/",
-    },
-    respect_gitignore = true,   -- Also exclude gitignored files
+    respect_gitignore = true,
+    patterns = { 'node_modules', '/dist/', '%.angular', '/build/', '/coverage/', '/__pycache__/' },
   },
-  debug = false,
 })
 ```
 
-## Navigation
-
-This plugin is **informational only** - it displays usage counts but doesn't override navigation.
-
-- Use your standard LSP keybindings (e.g., `gr` or `grr`) to navigate to references
-- Template references are included in the count but aren't directly navigable (Angular's TCB doesn't provide exact positions)
+`comprehensive_mode` is accepted as a deprecated no-op for compatibility. Both
+TypeScript and parent-template references now go through the same pipeline.
+The `debug` option remains accepted for compatibility; detailed result reasons
+are available through status and the analysis report.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `:AngularRefsRefresh` | Manually refresh reference counts |
-| `:AngularRefsToggle` | Toggle reference counts on/off |
-| `:AngularRefsUnused` | List all unused symbols in quickfix |
-| `:AngularRefsStatus` | Show Angular LSP status |
-| `:AngularRefsDumpTcb` | Dump raw TCB content (for debugging) |
+| Command | Purpose |
+| --- | --- |
+| `:AngularRefsRefresh` | Invalidate existing analysis and request fresh results. |
+| `:AngularRefsStatus` | Show provider initialization, reported versions, scope and incomplete reasons. |
+| `:AngularRefsUnused` | List verified unused symbols only; explain when analysis is incomplete. |
+| `:AngularRefsToggle` | Enable/disable analysis, cancelling pending work when disabled. |
+| `:AngularRefsDumpTcb` | Show raw compiler output at the cursor for diagnostics only. |
 
-## How It Works
+For inspection from Lua, `require('angular-refs.display').get_report(bufnr)` returns
+the current report, including each symbol's confirmed locations and uncertainty
+reasons. Stored locations use UTF-8 byte columns; requests are converted to each
+server's negotiated encoding. This report is an internal diagnostic interface,
+not a stable extension API.
 
-1. Uses LSP `textDocument/documentSymbol` to find all symbols in TypeScript files
-2. Queries your TypeScript LSP for standard `textDocument/references`
-3. Queries Angular Language Server using `angular/getTcb` to analyze template references
-4. Parses Angular templates for additional references in control flow blocks
-5. Displays combined counts as virtual text
+## Refresh behavior and limitations
 
-When `comprehensive_mode` is enabled, the plugin also:
-- Searches parent component templates for usages of inputs/outputs
-- Tracks component selector usage across the project
-- Detects two-way binding (`[(prop)]`) and correctly counts both input and output
+Each refresh owns a cancellable request group and a document/workspace revision.
+Late responses cannot restore labels after disabling, invalidation or buffer
+removal. Refreshes requested while busy are queued. Timeouts retain confirmed
+partial results, marked incomplete.
 
-Template caches are automatically invalidated when HTML files are saved.
+Automatic triggers reuse unchanged results for up to the configured timeout
+interval; explicit refresh and invalidation bypass that short-lived cache.
 
-## What's Tracked
+Edits and saves in TypeScript/HTML invalidate observed buffers, including callers
+and test files. HTML does not need its own LSP attachment. Relevant configuration
+and Git-ignore saves also invalidate results. Loaded unsaved text takes precedence
+over disk when interpreting locations. Git exclusions are checked asynchronously
+in batches using the file's repository root.
 
-### Signal-based APIs (Angular 16+)
+Invalidation currently covers all observed buffers conservatively rather than
+maintaining a dependency graph. External changes are picked up on Neovim's
+file-change events, focus regain or manual refresh; there is no recursive
+filesystem watcher. Language servers remain responsible for indexing source files.
 
-- `signal()` - Basic signals
-- `input()` / `input.required()` - Signal inputs
-- `output()` - Signal outputs
-- `model()` - Two-way binding model (generates input + `Change` output)
-- `computed()` - Computed signals
-- `linkedSignal()` - Linked signals (Angular 19+)
-- `resource()` / `rxResource()` - Async resources (Angular 19+)
-- `viewChild()` / `viewChildren()` - View queries
-- `contentChild()` / `contentChildren()` - Content queries
+## Development and validation
 
-### Decorator-based APIs
+`make test` runs the focused Plenary tests. Set `PLENARY_PATH` if Plenary is not
+already installed at a supported runtime path. Set `AR_TS_PARSER` to a compiled
+TypeScript grammar to include parser-backed unit tests.
 
-- `@Input()` / `@Output()` with alias support
-- `@ViewChild()` / `@ViewChildren()`
-- `@ContentChild()` / `@ContentChildren()`
-- `@HostBinding()` / `@HostListener()`
-- `host: {}` block in `@Component`
+Real-server fixtures and a matrix runner live in [test/live](test/live/README.md).
+They test exact source locations as well as counts. The old regex-count tests and
+unused expected-count JSON were removed with the old counting backend; the older
+Angular fixture source remains as historical material.
 
-### Other
+Local validation covered Angular **21.2.23 / TypeScript 5.9.3** and Angular
+**22.1.6 / TypeScript 6.0.3**, with Neovim **0.11.5 and 0.12.4**, across
+`typescript-tools.nvim`, `typescript-language-server` and `vtsls`.
+The support target is the latest stable patch of the two supported release lines;
+the versions above identify the actual local test runs, not untested patches.
 
-- Class methods and properties
-- Getters and setters
-- Exported functions and constants
+## Nix rollout
 
-### Excluded
-
-- Constructors
-- Private members (prefixed with `_` or using `private` keyword)
-- Local variables inside methods
-- Interfaces (type-only, no runtime impact)
-
-**Note:** Lifecycle hooks (`ngOnInit`, etc.) use local-only reference counting due to a [known LSP limitation](https://github.com/microsoft/TypeScript/issues/61484) where TypeScript counts all interface implementations project-wide. Only references within the same file are counted.
-
-## Filtering
-
-By default, references from these locations are excluded from counts:
-- `node_modules/`
-- `dist/`, `build/`, `.angular/`
-- `coverage/`, `__pycache__/`
-- Any files matching your `.gitignore`
-
-### Custom Exclusions
-
-```lua
-require("angular-refs").setup({
-  exclude = {
-    patterns = { "node_modules", "vendor/", "my%-folder" },  -- Lua patterns
-    respect_gitignore = true,  -- Default: true
-  },
-})
-```
-
-To show all references (including gitignored files):
-
-```lua
-require("angular-refs").setup({
-  exclude = {
-    respect_gitignore = false,
-  },
-})
-```
-
-## Template Syntax Support
-
-### Modern Control Flow (Angular 17+)
-
-- `@if` / `@else if` / `@else` - Conditional blocks
-- `@for` - For loops with `track` expressions
-- `@switch` / `@case` / `@default` - Switch statements
-- `@let` - Local template variables
-- `@defer` - Deferred loading blocks
-
-### Legacy Directives
-
-- `*ngIf` - Structural if directive
-- `*ngFor` - Structural for directive with `trackBy` support
-- `[ngSwitch]` / `*ngSwitchCase` - Switch directive
-
-### Bindings
-
-- Interpolations: `{{ property }}`
-- Property bindings: `[property]="expression"`
-- Event bindings: `(event)="handler()"`
-- Two-way bindings: `[(ngModel)]="property"`
-- Pipe expressions: `{{ value | pipeName }}`
-- Async pipe: `{{ observable$ | async }}`
-
-## Supported LSP Clients
-
-### Angular
-
-- `angularls` (mason, lspconfig)
-- `angular` (alternative name)
-
-### TypeScript
-
-- `typescript-tools` (recommended)
-- `ts_ls` (nvim-lspconfig)
-- `vtsls`
-- `typescript-language-server`
-- `tsserver`
-
-## Troubleshooting
-
-### References not showing
-
-1. Check TypeScript LSP is attached: `:LspInfo`
-2. Check Angular LSP is attached: `:AngularRefsStatus`
-3. Enable debug mode: `require("angular-refs").setup({ debug = true })`
-
-### Template references show 0
-
-The `angular/getTcb` request requires Angular LSP to be initialized:
-- Ensure your project has a valid `angular.json`
-- Angular LSP may need a moment to index on first open
-- Try `:AngularRefsDumpTcb` to verify TCB content is returned
-
-### Parent usages not counted
-
-Enable comprehensive mode in your config:
-```lua
-require("angular-refs").setup({
-  comprehensive_mode = true,
-})
-```
-
-Note: This mode performs project-wide searches and may be slower on large codebases.
-
-## Development
-
-The implementation is organized by responsibility:
-
-- `clients.lua`: shared LSP client selection and Angular attachment checks.
-- `lsp.lua`: document symbols and TypeScript reference requests.
-- `parser.lua`: TCB, template, component metadata, and host-expression text parsing.
-- `server.lua`: file access, caches, parent-template searches, and Angular analysis orchestration.
-- `display.lua`: refresh scheduling, result aggregation, and virtual text.
-- `init.lua`: configuration wiring, commands, and editor events.
-
-Default-mode refreshes analyze the template once and share its counts across symbols.
-Lifecycle hooks retain same-file TypeScript counting and skip template counts.
-Comprehensive mode retains its separate template/parent counting behavior.
-
-Run the tests with Neovim and an installed `plenary.nvim`:
-
-```sh
-nvim --headless -u test/minimal_init.lua -i NONE -c "lua require('plenary.test_harness').test_directory('test/plenary/', {minimal_init = 'test/minimal_init.lua', sequential = true})"
-```
-
-The suite covers parsers, fixture searches, and refresh/LSP coordination using mocked
-clients. It does not establish reference-count accuracy against running language servers.
-
-## License
-
-MIT
+Commit and publish the verified plugin revision, update the plugin input in your
+Nix configuration, then rebuild and restart Neovim. Remove a temporary
+`client.request` substitution patch only after the input points to this updated
+source. Runtime requests use the colon-method API; no `/nix/store` files need editing.
