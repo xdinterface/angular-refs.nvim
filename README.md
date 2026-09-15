@@ -282,6 +282,30 @@ require("angular-refs").setup({
 
 Note: This mode performs project-wide searches and may be slower on large codebases.
 
+## Development
+
+The implementation is organized by responsibility:
+
+- `clients.lua`: shared LSP client selection and Angular attachment checks.
+- `lsp.lua`: document symbols and TypeScript reference requests.
+- `parser.lua`: TCB, template, component metadata, and host-expression text parsing.
+- `server.lua`: file access, caches, parent-template searches, and Angular analysis orchestration.
+- `display.lua`: refresh scheduling, result aggregation, and virtual text.
+- `init.lua`: configuration wiring, commands, and editor events.
+
+Default-mode refreshes analyze the template once and share its counts across symbols.
+Lifecycle hooks retain same-file TypeScript counting and skip template counts.
+Comprehensive mode retains its separate template/parent counting behavior.
+
+Run the tests with Neovim and an installed `plenary.nvim`:
+
+```sh
+nvim --headless -u test/minimal_init.lua -i NONE -c "lua require('plenary.test_harness').test_directory('test/plenary/', {minimal_init = 'test/minimal_init.lua', sequential = true})"
+```
+
+The suite covers parsers, fixture searches, and refresh/LSP coordination using mocked
+clients. It does not establish reference-count accuracy against running language servers.
+
 ## License
 
 MIT

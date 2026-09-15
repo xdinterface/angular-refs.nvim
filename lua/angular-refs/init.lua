@@ -1,6 +1,7 @@
 local M = {}
 
 local config = require("angular-refs.config")
+local clients = require("angular-refs.clients")
 
 local function is_spec_file(filename)
   return filename:match("%.spec%.ts$") or filename:match("%.test%.ts$")
@@ -9,14 +10,7 @@ end
 ---@param bufnr number
 ---@return boolean
 local function has_angular_lsp(bufnr)
-  local server = require("angular-refs.server")
-  for _, name in ipairs(server.ANGULAR_CLIENT_NAMES) do
-    local clients = vim.lsp.get_clients({ bufnr = bufnr, name = name })
-    if #clients > 0 then
-      return true
-    end
-  end
-  return false
+  return clients.get_angular(bufnr) ~= nil
 end
 
 ---@param opts AngularRefsConfig|nil
@@ -53,7 +47,7 @@ function M.setup(opts)
         if filename:match("%.html$") then
           local server = require("angular-refs.server")
           server.invalidate(filename)
-          server.invalidate_parent_cache(filename)
+          server.invalidate_parent_cache()
           for _, buf in ipairs(vim.api.nvim_list_bufs()) do
             if vim.api.nvim_buf_is_loaded(buf) and has_angular_lsp(buf) then
               local bufname = vim.api.nvim_buf_get_name(buf)
@@ -89,7 +83,7 @@ function M.setup(opts)
     callback = function(args)
       if not config.is_enabled() then return end
       local client = vim.lsp.get_client_by_id(args.data.client_id)
-      if client and vim.tbl_contains(require("angular-refs.server").ANGULAR_CLIENT_NAMES, client.name) then
+      if clients.is_angular(client) then
         local bufname = vim.api.nvim_buf_get_name(args.buf)
         if bufname:match("%.ts$") and not is_spec_file(bufname) then
           require("angular-refs.display").schedule_update(args.buf)

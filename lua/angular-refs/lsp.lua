@@ -1,4 +1,113 @@
 local M = {}
+local clients = require("angular-refs.clients")
+
+---@class Symbol
+---@field name string
+---@field line number 0-indexed line number
+---@field col number 0-indexed column
+---@field kind string Symbol kind
+
+---Get symbols via LSP documentSymbol
+---@param bufnr number
+---@param callback fun(symbols: Symbol[])
+function M.get_symbols(bufnr, callback)
+  local params = { textDocument = vim.lsp.util.make_text_document_params(bufnr) }
+
+  local ts_client = clients.get_typescript(bufnr)
+
+  if not ts_client then
+    callback({})
+    return
+  end
+
+  ts_client.request("textDocument/documentSymbol", params, function(err, result)
+    if err or not result then
+      callback({})
+      return
+    end
+
+    local symbols = {}
+    local SK = vim.lsp.protocol.SymbolKind
+
+    -- Top-level symbols to track (exported functions, constants, enums)
+    local TOP_LEVEL_KINDS = {
+      [SK.Function] = true,
+      [SK.Constant] = true,
+      [SK.Enum] = true,
+    }
+
+    -- Class/interface member kinds to track
+    local MEMBER_KINDS = {
+      [SK.Method] = true,
+      [SK.Property] = true,
+      [SK.Field] = true,
+    }
+
+    -- Container kinds that have trackable children
+    local CONTAINER_KINDS = {
+      [SK.Class] = true,
+      [SK.Interface] = true,
+    }
+
+    for _, item in ipairs(result) do
+      local range = item.range or item.location and item.location.range
+      if not range then
+        goto continue
+      end
+
+      local kind = item.kind
+      local name = item.name
+
+      -- Skip private (underscore prefix convention)
+      if name:match("^_") then
+        goto continue
+      end
+
+      -- Track top-level exports (functions, constants, enums)
+      if TOP_LEVEL_KINDS[kind] then
+        table.insert(symbols, {
+          name = name,
+          line = range.start.line,
+          col = range.start.character,
+          kind = SK[kind] or "unknown",
+        })
+      end
+
+      -- Track class/interface members (but not their internal variables)
+      if CONTAINER_KINDS[kind] and item.children then
+        for _, child in ipairs(item.children) do
+          local child_range = child.range or child.location and child.location.range
+          if child_range and child.kind and MEMBER_KINDS[child.kind] then
+            local child_name = child.name
+            local child_line = child_range.start.line
+            -- Skip underscore-prefixed members (convention for private)
+            if not child_name:match("^_") then
+              table.insert(symbols, {
+                name = child_name,
+                line = child_line,
+                col = child_range.start.character,
+                kind = SK[child.kind] or "unknown",
+              })
+            end
+          end
+        end
+      end
+
+      ::continue::
+    end
+
+    local cfg = require("angular-refs.config").get()
+    if cfg.debug then
+      vim.notify("angular-refs: Found " .. #symbols .. " symbols", vim.log.levels.DEBUG)
+      for _, s in ipairs(symbols) do
+        vim.notify("angular-refs:   [" .. s.kind .. "] " .. s.name .. " at line " .. s.line, vim.log.levels.DEBUG)
+      end
+    end
+
+    callback(symbols)
+  end, bufnr)
+end
+
 
 ---@class LspReference
 ---@field file string Full file path
@@ -19,16 +128,7 @@ function M.get_references(bufnr, line, col, callback, local_only)
     context = { includeDeclaration = false },
   }
 
-  local server = require("angular-refs.server")
-  local ts_client = nil
-
-  for _, name in ipairs(server.TS_CLIENT_NAMES) do
-    local clients = vim.lsp.get_clients({ bufnr = bufnr, name = name })
-    if #clients > 0 then
-      ts_client = clients[1]
-      break
-    end
-  end
+  local ts_client = clients.get_typescript(bufnr)
 
   if not ts_client then
     callback({})
