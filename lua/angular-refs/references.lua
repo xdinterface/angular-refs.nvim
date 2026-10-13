@@ -30,8 +30,10 @@ local function location_key(location)
   return location.uri .. ":" .. start.line .. ":" .. start.character
 end
 
+---@alias AngularRefsTarget {uri: string, line: integer, character: integer}
+
 ---@param result table|table[]|nil Location | Location[] | LocationLink[]
----@return {uri: string, line: integer}[]
+---@return AngularRefsTarget[]
 local function normalize_definitions(result)
   if not result then
     return {}
@@ -41,7 +43,7 @@ local function normalize_definitions(result)
   for _, item in ipairs(list) do
     local range = item.targetSelectionRange or item.range
     if range then
-      table.insert(targets, { uri = item.uri or item.targetUri, line = range.start.line })
+      table.insert(targets, { uri = item.uri or item.targetUri, line = range.start.line, character = range.start.character })
     end
   end
   return targets
@@ -320,7 +322,7 @@ function M.collect(ctx, symbols, callback)
   end
 
   ---@param location table
-  ---@param on_targets fun(targets: {uri: string, line: integer}[]|nil)
+  ---@param on_targets fun(targets: AngularRefsTarget[]|nil)
   local function definitions(location, on_targets)
     local cache_key = location_key(location)
     if definition_cache[cache_key] then
@@ -392,7 +394,7 @@ function M.collect(ctx, symbols, callback)
         end
         local matches = false
         for _, target in ipairs(targets) do
-          if target.uri == ctx.uri and target.line == symbol.line then
+          if target.uri == ctx.uri and target.line == symbol.line and target.character == symbol.col then
             matches = true
           end
         end

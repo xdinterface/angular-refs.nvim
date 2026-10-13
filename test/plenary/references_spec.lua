@@ -150,6 +150,19 @@ describe('angular-refs.references', function()
     assert.equals(2, #ts.calls)
   end)
 
+  it('tells apart members declared on the same line', function()
+    local ng = fake_client('angularls', {
+      [key(REFS, comp, 10, 2)] = { loc('/w/app/src/use.ts', 3, 10), loc('/w/app/src/other.ts', 4, 6) },
+    })
+    local ts = fake_client('ts_ls', {
+      -- `a = 1; b = 2;` on line 10: the second usage resolves to `b` at character 9
+      [key(DEF, '/w/app/src/use.ts', 3, 10)] = { loc(comp, 10, 2) },
+      [key(DEF, '/w/app/src/other.ts', 4, 6)] = { loc(comp, 10, 9) },
+    })
+    local results = collect(context(ng, ts), { symbol() })
+    assert.same({ prod = 1, test = 0, related = true }, results[1])
+  end)
+
   it('filters members of classes with heritage when another .ts file uses them', function()
     local ng = fake_client('angularls', {
       [key(REFS, comp, 10, 2)] = { loc('/w/app/src/other.ts', 1, 1) },
