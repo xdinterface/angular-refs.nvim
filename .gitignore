@@ -1,7 +1,5 @@
 # Node.js
 node_modules/
-server/dist/
-server/node_modules/
 *.log
 npm-debug.log*
 
@@ -23,8 +21,9 @@ Thumbs.db
 # Build artifacts
 *.tsbuildinfo
 
-# Claude Code
+# Local development notes
 .claude/
+CLAUDE.md
 
 # Integration test language servers
 test/.servers/
