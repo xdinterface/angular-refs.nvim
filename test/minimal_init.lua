@@ -10,3 +10,6 @@ vim.opt.rtp:prepend(plugin_path)
 vim.opt.swapfile = false
 vim.opt.backup = false
 vim.opt.writebackup = false
+
+-- Shared test helpers live under test/ and are required as `test.<name>`
+package.path = plugin_path .. '/?.lua;' .. package.path

@@ -1,3 +1,4 @@
+local fake = require('test.fake_client')
 local clients = require('angular-refs.clients')
 local config = require('angular-refs.config')
 
@@ -14,7 +15,7 @@ local function fake_client(opts)
     next_id = 0,
   }
   function client:request(method, params, handler, bufnr)
-    assert(getmetatable(self) == nil and self == client, 'expected method-call form')
+    assert(self == client and type(method) == 'string', 'client called in the wrong form for this Neovim version')
     self.next_id = self.next_id + 1
     self.pending[self.next_id] = { method = method, params = params, handler = handler, bufnr = bufnr }
     return true, self.next_id
@@ -31,7 +32,7 @@ local function fake_client(opts)
   function client:in_flight()
     return vim.tbl_count(self.pending)
   end
-  return client
+  return fake.like_running_neovim(client)
 end
 
 describe('angular-refs.clients', function()
@@ -104,11 +105,12 @@ describe('angular-refs.clients', function()
   end)
 
   describe('request', function()
-    it('uses the method-call form on Neovim 0.11+', function()
+    it('calls the client in the form the running Neovim version expects', function()
       local client = fake_client()
       local ok, id = clients.request(client, 'textDocument/references', {}, function() end, 1)
       assert.is_true(ok)
       assert.equals(1, id)
+      assert.equals('textDocument/references', client.pending[1].method)
     end)
   end)
 

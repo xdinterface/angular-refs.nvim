@@ -1,3 +1,4 @@
+local fake = require('test.fake_client')
 local references = require('angular-refs.references')
 local clients = require('angular-refs.clients')
 local config = require('angular-refs.config')
@@ -32,7 +33,7 @@ local function fake_client(name, routes)
     return true, #self.calls
   end
   function client:cancel_request() end
-  return client
+  return fake.like_running_neovim(client)
 end
 
 local function symbol(overrides)

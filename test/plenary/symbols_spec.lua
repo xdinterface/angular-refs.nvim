@@ -1,3 +1,4 @@
+local fake = require('test.fake_client')
 local symbols = require('angular-refs.symbols')
 local config = require('angular-refs.config')
 
@@ -191,7 +192,7 @@ describe('angular-refs.symbols', function()
         handler(err, result)
         return true, 1
       end
-      return client
+      return fake.like_running_neovim(client)
     end
 
     it('returns extracted symbols from the client response', function()
