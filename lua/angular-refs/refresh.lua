@@ -182,11 +182,17 @@ function M.run(bufnr)
         fail()
         return
       end
+      stop_timer(timeout_timer)
+      if vim.api.nvim_buf_get_changedtick(bufnr) ~= changedtick then
+        -- Symbol positions describe the old text: rendering would put labels on the wrong lines
+        state.token, state.batch, state.running = nil, nil, nil
+        M.schedule(bufnr)
+        return
+      end
       local entries = {}
       for index, symbol in ipairs(list) do
         table.insert(entries, { symbol = symbol, counts = results[index] })
       end
-      stop_timer(timeout_timer)
       display.render(bufnr, entries)
       state.token, state.batch, state.running, state.retry_ms = nil, nil, nil, nil
       state.stamp = { changedtick = changedtick, generation = started_generation }
