@@ -18,10 +18,11 @@ end
 
 ---Fake client answering from `routes` (method + position -> response); unknown positions get `{}`
 local function fake_client(name, routes)
-  local client = { name = name, id = name == 'angularls' and 1 or 2, offset_encoding = 'utf-16', calls = {} }
+  local client = { name = name, id = name == 'angularls' and 1 or 2, offset_encoding = 'utf-16', calls = {}, params = {} }
   function client:request(method, params, handler)
     local k = method .. ' ' .. params.textDocument.uri .. ':' .. params.position.line .. ':' .. params.position.character
     table.insert(self.calls, k)
+    table.insert(self.params, { method = method, params = params })
     local response = routes[k]
     if response == NIL_RESULT then
       handler(nil, nil)
@@ -104,6 +105,13 @@ describe('angular-refs.references', function()
     local results = collect(context(ng, ts), { symbol() })
     assert.same({ prod = 2, test = 0, related = false }, results[1])
     assert.equals(0, #ts.calls)
+  end)
+
+  it('sends spec-compliant reference requests that exclude the declaration', function()
+    local ng = fake_client('angularls', { [key(REFS, comp, 10, 2)] = { loc(comp, 20, 9) } })
+    collect(context(ng, fake_client('ts_ls', {})), { symbol() })
+    assert.equals(REFS, ng.params[1].method)
+    assert.same({ includeDeclaration = false }, ng.params[1].params.context)
   end)
 
   it('ignores references inside the symbol own decorators', function()

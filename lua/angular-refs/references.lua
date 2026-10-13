@@ -244,7 +244,12 @@ function M.collect(ctx, symbols, callback)
 
   ---@param callback_fn fun(err: table|nil, result: any)
   local function request(client, method, uri, position, callback_fn)
-    ctx.batch:request(client, method, position_params(uri, position), ctx.bufnr, callback_fn)
+    local params = position_params(uri, position)
+    if method == "textDocument/references" then
+      -- Required by the LSP spec; angularls reports the declaration anyway, see on_own_declaration
+      params.context = { includeDeclaration = false }
+    end
+    ctx.batch:request(client, method, params, ctx.bufnr, callback_fn)
   end
 
   ---@param uri string
