@@ -266,16 +266,21 @@ describe('angular-refs.references', function()
 
   it('leaves out usages in gitignored files when respect_gitignore is on', function()
     config.setup({ scope = { respect_gitignore = true } })
-    local repo = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
+    local repo = vim.fn.resolve(vim.fn.tempname())
+    vim.fn.mkdir(repo .. '/src', 'p')
+    vim.fn.system({ 'git', 'init', '-q', repo })
+    vim.fn.writefile({ '*.generated.ts' }, repo .. '/.gitignore')
     local file = repo .. '/src/comp.ts'
     local ng = fake_client('angularls', {
-      [key(REFS, file, 10, 2)] = { loc(repo .. '/src/use.ts', 8, 4), loc(repo .. '/test/.servers/generated.ts', 2, 4) },
+      [key(REFS, file, 10, 2)] = { loc(repo .. '/src/use.ts', 8, 4), loc(repo .. '/src/api.generated.ts', 2, 4) },
     })
     local fn = symbol({ kind = 'Function' })
     fn.container, fn.container_pos = nil, nil
     local ctx = context(ng, fake_client('ts_ls', {}))
     ctx.uri, ctx.path, ctx.root = vim.uri_from_fname(file), file, repo
-    assert.same({ prod = 1, test = 0, related = false }, collect(ctx, { fn })[1])
+    local counts = collect(ctx, { fn })[1]
+    vim.fn.delete(repo, 'rf')
+    assert.same({ prod = 1, test = 0, related = false }, counts)
   end)
 
   it('routes template locations to angularls and falls back to it when tsserver has nothing', function()
