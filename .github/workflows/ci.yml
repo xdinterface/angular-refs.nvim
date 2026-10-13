@@ -27,12 +27,13 @@ jobs:
         run: make test-unit
 
   integration:
-    name: Integration tests (Angular ${{ matrix.angular }})
+    name: Integration tests (Angular ${{ matrix.angular }}, Neovim ${{ matrix.neovim }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         angular: ['20', latest]
+        neovim: [v0.10.4, stable]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,7 +42,7 @@ jobs:
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
-          version: stable
+          version: ${{ matrix.neovim }}
       - name: Install plenary.nvim
         run: git clone --depth 1 https://github.com/nvim-lua/plenary.nvim ~/plenary.nvim
       - name: Install fixture packages and language servers
