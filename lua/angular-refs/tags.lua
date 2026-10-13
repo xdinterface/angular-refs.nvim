@@ -100,6 +100,8 @@ function M.binds_input(tag, name)
     ["[" .. name .. "]"] = true,
     ["[(" .. name .. ")]"] = true,
     ["bind-" .. name] = true,
+    -- Structural directive shorthand: `*name="x"` binds the directive's `name` input
+    ["*" .. name] = true,
   }
   for _, attribute in ipairs(M.attribute_names(tag)) do
     if forms[attribute] then

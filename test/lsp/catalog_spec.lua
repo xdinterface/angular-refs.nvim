@@ -118,7 +118,7 @@ describe('angular-refs with real language servers', function()
       unusedFlag = 'unused',
     }))
     assert_labels('transform-inputs/transform-parent.component.ts', prefixed('TransformParentComponent', {
-      flag = usages(7),
+      flag = usages(8),
       count = usages(1),
       items = usages(1),
       noop = usages(1),
@@ -126,7 +126,7 @@ describe('angular-refs with real language servers', function()
   end)
 
   it('counts attribute-directive inputs with transform', function()
-    assert_labels('transform-inputs/transform-flag.directive.ts', { ['TransformFlagDirective.appFlag'] = usages(2) })
+    assert_labels('transform-inputs/transform-flag.directive.ts', { ['TransformFlagDirective.appFlag'] = usages(3) })
   end)
 
   it('counts unsaved edits in an htmlangular template buffer', function()
