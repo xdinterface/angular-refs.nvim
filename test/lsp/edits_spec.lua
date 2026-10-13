@@ -58,6 +58,40 @@ describe('angular-refs after edits, with real language servers', function()
     assert.equals('1 usage', helpers.labels(catalog)['CatalogComponent.tsOnlyMethod'])
   end)
 
+  it('reuses definitions that typing in an unrelated file cannot change', function()
+    local refresh = require('angular-refs.refresh')
+    local clients = require('angular-refs.clients')
+    local catalog = helpers.open('catalog/catalog.component.ts')
+    helpers.refresh(catalog)
+
+    local definitions = 0
+    local request = clients.request
+    clients.request = function(client, method, ...)
+      if method == 'textDocument/definition' then
+        definitions = definitions + 1
+      end
+      return request(client, method, ...)
+    end
+    local function definitions_after(bump)
+      definitions = 0
+      bump()
+      refresh.run(catalog)
+      helpers.wait_fresh(catalog)
+      return definitions
+    end
+
+    local after_save = definitions_after(function()
+      refresh.bump_generation()
+    end)
+    local after_typing_elsewhere = definitions_after(function()
+      refresh.bump_generation(helpers.app .. '/src/app/services/data.service.ts')
+    end)
+    clients.request = request
+
+    assert.is_true(after_save > 0, 'the catalog needs definition requests at all')
+    assert.equals(0, after_typing_elsewhere)
+  end)
+
   it('keeps every label on its own line after lines are inserted above', function()
     local catalog = helpers.open('catalog/catalog.component.ts')
     helpers.refresh(catalog)
