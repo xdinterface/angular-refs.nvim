@@ -1,0 +1,6 @@
+{
+  "name": "angular-test-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fixture for angular-refs.nvim integration tests. Install with test/scripts/install-lsp-deps.sh"
+}

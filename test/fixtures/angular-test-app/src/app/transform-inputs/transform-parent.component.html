@@ -1,0 +1,18 @@
+<p>äöü — <app-transform-child [disabled]="flag" /></p>
+<app-transform-child disabled="true"></app-transform-child>
+<app-transform-child disabled></app-transform-child>
+<app-transform-child bind-disabled="flag"></app-transform-child>
+<app-transform-child
+  title="a > b"
+  [disabled]="count > 1"
+></app-transform-child>
+@if (flag) {
+  <app-transform-child [disabled]="flag" />
+}
+@for (item of items; track item) {
+  <app-transform-child [size]="item" />
+}
+<app-transform-child size="3" />
+<app-transform-child [attr.disabled]="flag" [class.disabled]="flag" (click)="noop()" />
+<p appFlag></p>
+<p [appFlag]="flag"></p>

@@ -1,0 +1,111 @@
+<!-- interpolation forms -->
+<p>{{ interp }}</p>
+<p>{{ interpMethod() }}</p>
+<p>{{ chainObj.a.b }}</p>
+<p>{{ safeNav?.name }}</p>
+<p>{{ nonNull!.name }}</p>
+<p>{{ ternaryCond ? ternaryA : ternaryB }}</p>
+<p>{{ nullishProp ?? 'x' }}</p>
+<p>{{ formatFn(methodArg) }}</p>
+<p>{{ this.thisPrefixed }}</p>
+<p>{{ $any(anyCast).x }}</p>
+<p>{{ optionalFn?.() }}</p>
+<p>{{ `pre ${tplLiteral}` }}</p>
+<p>{{ getterProp }}</p>
+<p>{{ enumHolder.A }}</p>
+
+<!-- property / attribute / class / style bindings -->
+<input [value]="propBind" />
+<input bind-title="bindPrefix" />
+<div [attr.aria-label]="attrBind"></div>
+<div [class.active]="classBind"></div>
+<div [style.width.px]="styleBind"></div>
+<div [ngClass]="{ on: ngClassObj }"></div>
+<div [title]="[arrayLiteralItem].length"></div>
+
+<!-- event bindings -->
+<button (click)="eventHandler()"></button>
+<input (input)="eventWithArg($event)" />
+<button on-dblclick="onPrefixHandler()"></button>
+<input (keydown.enter)="keyedEvent()" />
+<button (mouseenter)="assignTarget = true"></button>
+<button (mouseleave)="multiStmtA(); multiStmtB()"></button>
+<button (focus)="setterProp = 2"></button>
+
+<!-- two-way -->
+<input [(ngModel)]="twoWayModel" (ngModelChange)="onModelChange($event)" />
+
+<!-- control flow (@ blocks) -->
+@if (ifCond) {
+  <span>if</span>
+} @else if (elseIfCond) {
+  <span>else if</span>
+}
+@if (ifAs; as v) {
+  <span>{{ v }}</span>
+}
+@for (item of forItems; track item) {
+  <span>{{ forInner }}</span>
+} @empty {
+  <span>{{ emptyMsg }}</span>
+}
+@for (i of forItems2; track trackFn($index, i)) {
+  <span>{{ i }}</span>
+}
+@switch (switchVal) {
+  @case (caseVal) { <span>case</span> }
+}
+@defer (when deferWhen) {
+  <span>{{ deferBody }}</span>
+} @placeholder {
+  <span>{{ deferPlaceholder }}</span>
+}
+@let local = letSource;
+<span>{{ local }}</span>
+
+<!-- legacy structural directives -->
+<div *ngIf="ngIfCond"></div>
+<ng-template [ngIf]="ngTemplateIf"><span>tpl</span></ng-template>
+<div *ngFor="let n of ngForItems; trackBy: ngForTrack">{{ n }}</div>
+<div [ngSwitch]="ngSwitchVal">
+  <span *ngSwitchCase="ngSwitchCaseVal">case</span>
+</div>
+<ng-template #tpl let-x><span>{{ x }}</span></ng-template>
+<ng-container *ngTemplateOutlet="tpl; context: templateOutletCtx"></ng-container>
+
+<!-- pipes -->
+<p>{{ pipeInput | uppercase }}</p>
+<p>{{ 1.5 | number: pipeArg }}</p>
+<p>{{ asyncObs$ | async }}</p>
+<p>{{ 'x' | catalogPipe }}</p>
+
+<!-- signals -->
+<p>{{ signalVal() }}</p>
+<p>{{ computedVal() }}</p>
+
+<!-- animations (@ prefix) -->
+<div [@fade]="animState" (@fade.done)="animDone()"></div>
+
+<!-- i18n ICU -->
+<span>{icuCount, plural, =0 {none} other {many}}</span>
+
+<!-- child component, directive, template reference into a child -->
+<app-catalog-child
+  #child
+  [childIn]="childInputValue"
+  [tBool]="true"
+  [tAliasExt]="5"
+  [tSignal]="true"
+  [aliasName]="'x'"
+  [signalIn]="'x'"
+  [requiredIn]="1"
+  [inputsArrayProp]="'x'"
+  [(childModel)]="modelSync"
+  (childOut)="onChildOut($event)"
+  (legacyOut)="eventHandler()"
+/>
+<p>{{ child.publicChildMethod() }}</p>
+<p [appCatHighlight]="directiveColor"></p>
+
+<!-- TypeScript-only method is reached through this one -->
+<button (blur)="callsTsOnly()"></button>

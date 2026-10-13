@@ -1,0 +1,54 @@
+<div class="decorators-test">
+  <h2>Decorators Test</h2>
+
+  <!-- Input properties in template -->
+  <p>Simple: {{ simpleInput }}</p>
+  <p>Aliased: {{ aliasedInput }}</p>
+  <p>Required: {{ requiredInput }}</p>
+  <p>Bool: {{ boolInput }}</p>
+  <p>Complex: {{ complexInput }}</p>
+  <p>Optional: {{ optionalInput }}</p>
+
+  <!-- Regular properties -->
+  <p>Regular: {{ regularProperty }}</p>
+  <p>Another: {{ anotherProperty }}</p>
+
+  <!-- Host binding properties used in template too -->
+  <p>Active: {{ isActive }}</p>
+  <p>Disabled: {{ isDisabled }}</p>
+  <p>ID: {{ componentId }}</p>
+
+  <!-- ViewChild template references -->
+  <input #inputRef type="text" placeholder="Input ref">
+  <button #buttonRef>Button ref</button>
+  <div #staticRef>Static ref</div>
+  <div #readRef>Read ref</div>
+
+  <ng-template #templateRef>
+    <p>Template content</p>
+  </ng-template>
+
+  <!-- ViewChildren template references -->
+  <ul>
+    <li #listItem>Item 1</li>
+    <li #listItem>Item 2</li>
+    <li #listItem>Item 3</li>
+  </ul>
+
+  <div #multiRef>Multi 1</div>
+  <div #multiRef>Multi 2</div>
+
+  <!-- Event bindings for outputs -->
+  <button (click)="emitSimple()">Emit Simple</button>
+  <button (click)="emitAliased()">Emit Aliased</button>
+  <button (click)="emitData()">Emit Data</button>
+
+  <!-- Regular method calls -->
+  <p>{{ regularMethod() }}</p>
+  <button (click)="methodWithViewChild()">Access ViewChild</button>
+  <button (click)="methodWithViewChildren()">Access ViewChildren</button>
+
+  <!-- Content projection slots -->
+  <ng-content select="[header]"></ng-content>
+  <ng-content></ng-content>
+</div>

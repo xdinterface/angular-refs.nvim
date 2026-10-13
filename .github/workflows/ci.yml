@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    name: Unit tests (Neovim ${{ matrix.neovim }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim: [v0.10.4, stable]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+      - name: Install plenary.nvim
+        run: git clone --depth 1 https://github.com/nvim-lua/plenary.nvim ~/plenary.nvim
+      - name: Run unit tests
+        env:
+          PLENARY_DIR: /home/runner/plenary.nvim
+        run: make test-unit
+
+  integration:
+    name: Integration tests (Angular ${{ matrix.angular }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        angular: ['20', latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Install plenary.nvim
+        run: git clone --depth 1 https://github.com/nvim-lua/plenary.nvim ~/plenary.nvim
+      - name: Install fixture packages and language servers
+        run: make lsp-deps ANGULAR=${{ matrix.angular }}
+      - name: Run integration tests
+        env:
+          PLENARY_DIR: /home/runner/plenary.nvim
+        run: make test-lsp

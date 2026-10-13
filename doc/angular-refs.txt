@@ -1,0 +1,322 @@
+*angular-refs.txt*  Usage counts for Angular projects
+
+Homepage: <https://github.com/xdinterface/angular-refs.nvim>
+License:  MIT
+
+==============================================================================
+CONTENTS                                               *angular-refs-contents*
+
+  1. Introduction ...................... |angular-refs-introduction|
+  2. Requirements ...................... |angular-refs-requirements|
+  3. Setup ............................. |angular-refs-setup|
+  4. Labels ............................ |angular-refs-labels|
+  5. Configuration ..................... |angular-refs-config|
+  6. Scope ............................. |angular-refs-scope|
+  7. Commands .......................... |angular-refs-commands|
+  8. Highlight groups .................. |angular-refs-highlights|
+  9. Health check and debugging ........ |angular-refs-health|
+  10. Limitations ...................... |angular-refs-limitations|
+
+==============================================================================
+1. INTRODUCTION                                    *angular-refs-introduction*
+
+angular-refs shows how often each function, property and variable in an
+Angular TypeScript file is used. The count is displayed as virtual text at
+the end of the line that declares the symbol.
+
+A TypeScript language server alone cannot produce these numbers, because it
+does not read Angular templates. A property that is only bound in a template
+looks unused to it. This plugin asks the Angular language server instead,
+which reports usages in TypeScript and in every template that touches the
+symbol: the component's own template, inline templates, parent components
+that bind an input or listen to an output, control flow blocks such as
+`@if`, `@for` and `@defer`, `@let` declarations, pipes and host metadata.
+
+On top of the language server results the plugin
+
+- counts lifecycle hooks and other interface members per class, so the
+  `ngOnInit` of one component is not credited with the calls of all others,
+- finds parent bindings of `@Input({ transform })` inputs, which the
+  language server does not report,
+- ignores usages outside your own source code, see |angular-refs-scope|.
+
+Labels are only drawn when every request for a buffer succeeded. While the
+project is loading, or when a server returns an error, the previous labels
+stay in place instead of showing incomplete numbers.
+
+==============================================================================
+2. REQUIREMENTS                                    *angular-refs-requirements*
+
+- Neovim 0.10 or later.
+- The Angular language server (`angularls`) attached to `typescript`
+  buffers. Attaching it to `htmlangular` buffers as well is recommended, so
+  that unsaved template changes are counted.
+- A TypeScript language server. Any of `typescript-tools`, `ts_ls`,
+  `vtsls`, `typescript-language-server` or `tsserver` works.
+- Angular 20 or later. On Angular 20, usages inside `host: {}` metadata are
+  only reported when `"typeCheckHostBindings": true` is set in
+  `angularCompilerOptions` of your `tsconfig.json`. Angular 21 enables this
+  by default.
+
+If no Angular language server is attached to a buffer, the plugin shows no
+labels for it. Counts from TypeScript alone would mark template-only symbols
+as unused.
+
+==============================================================================
+3. SETUP                                                  *angular-refs-setup*
+
+                                                        *angular-refs.setup()*
+The plugin does nothing until its setup function is called: >lua
+
+    require("angular-refs").setup()
+<
+Pass a table to change any of the defaults described in
+|angular-refs-config|. Calling `setup()` again replaces the previous
+configuration.
+
+With lazy.nvim the plugin can be loaded for TypeScript files only: >lua
+
+    {
+      "xdinterface/angular-refs.nvim",
+      ft = "typescript",
+      opts = {},
+    }
+<
+==============================================================================
+4. LABELS                                                *angular-refs-labels*
+
+Each symbol gets exactly one label. The first rule that applies wins:
+
+  Label           Meaning~
+  `3 usages`        Used in production code. The number includes usages in
+                  test files.
+  `lifecycle`       An Angular lifecycle hook such as `ngOnInit` that is
+                  only called by Angular.
+  `host listener`   A `@HostListener` method that nothing else calls.
+  `host binding`    A `@HostBinding` property that nothing else reads.
+  `implements`      A member that exists to satisfy an interface or a base
+                  class and is only used through it.
+  `tests only`      Only test files use it. It can usually be deleted
+                  together with its tests.
+  `unused`          Nothing uses it.
+
+Labelled symbols are class and interface members (methods, properties,
+accessors, signals, inputs and outputs) and top-level functions, constants,
+variables and enums. Names matching `symbols.ignore` get no label.
+
+The wording of every label can be changed with `display.labels`.
+
+==============================================================================
+5. CONFIGURATION                                         *angular-refs-config*
+
+These are the defaults: >lua
+
+    require("angular-refs").setup({
+      enabled = true,
+      display = {
+        position = "eol",
+        separator = "    | ",
+        align = false,
+        format = "%d usages",
+        format_singular = "%d usage",
+        labels = {
+          unused = "unused",
+          tests_only = "tests only",
+          lifecycle = "lifecycle",
+          host_listener = "host listener",
+          host_binding = "host binding",
+          implements = "implements",
+        },
+      },
+      trigger = { debounce_ms = 500 },
+      scope = {
+        exclude = {},
+        test_patterns = {
+          "%.spec%.ts$", "%.test%.ts$", "%.cy%.ts$", "/e2e/",
+        },
+        respect_gitignore = false,
+      },
+      symbols = {
+        ignore = { "^_" },
+        test_buffers = false,
+      },
+      clients = {
+        angular = { "angularls", "angular" },
+        typescript = {
+          "typescript-tools", "ts_ls", "vtsls",
+          "typescript-language-server", "tsserver",
+        },
+      },
+      debug = false,
+    })
+<
+Nested tables are merged with the defaults, so only the fields you want to
+change need to be given. Lists are replaced as a whole: setting
+`scope.test_patterns` to `{ "/testing/" }` removes the default patterns.
+
+enabled                                          *angular-refs-config-enabled*
+    Type: `boolean`, Default: `true`
+    Whether labels are shown after setup. |:AngularRefsToggle| changes this
+    at runtime.
+
+display.position                                *angular-refs-config-position*
+    Type: `"eol"` or `"above"`, Default: `"eol"`
+    `"eol"` draws the label after the end of the line. `"above"` draws it on
+    a virtual line above the symbol, indented like the line itself.
+
+display.separator                              *angular-refs-config-separator*
+    Type: `string`, Default: `"    | "`
+    Text placed between the end of the line and the label. The default uses
+    the same four spaces as diagnostic virtual text (see the `spacing`
+    option of |vim.diagnostic.config()|), so labels and diagnostics line up
+    the same way. Not used with `position = "above"`.
+
+display.align                                      *angular-refs-config-align*
+    Type: `boolean`, Default: `false`
+    Line up the labels of neighbouring lines in one column. Labelled lines
+    belong together when only blank lines, comments or lines at the same
+    indent lie between them. A method body or an object literal in between
+    starts a new column.
+
+display.format                                    *angular-refs-config-format*
+display.format_singular
+    Type: `string`, Default: `"%d usages"` and `"%d usage"`
+    Format strings for the usage count, passed to |string.format()|.
+    `format_singular` is used for a count of one.
+
+display.labels                                    *angular-refs-config-labels*
+    Type: `table`
+    The text of each label described in |angular-refs-labels|. Fields you
+    leave out keep their default.
+
+trigger.debounce_ms                          *angular-refs-config-debounce_ms*
+    Type: `integer`, Default: `500`
+    How long to wait after the last edit before counting again.
+
+scope.exclude                                    *angular-refs-config-exclude*
+    Type: `string[]`, Default: `{}`
+    Lua patterns matched against the absolute path of every file that
+    contains a usage. Usages in matching files are ignored. These patterns
+    add to the built-in rules in |angular-refs-scope|. Example: >lua
+
+        scope = { exclude = { "/generated/" } }
+<
+scope.test_patterns                        *angular-refs-config-test_patterns*
+    Type: `string[]`
+    Lua patterns that identify test files by their absolute path. Usages in
+    test files are counted, but a symbol that only tests use is labelled
+    `tests only`.
+
+scope.respect_gitignore                *angular-refs-config-respect_gitignore*
+    Type: `boolean`, Default: `false`
+    Also ignore usages in files that git ignores. This is the only option
+    that makes the plugin start a process (`git check-ignore`). It is off by
+    default because the built-in rules already cover dependencies and build
+    output.
+
+symbols.ignore                                    *angular-refs-config-ignore*
+    Type: `string[]`, Default: `{ "^_" }`
+    Lua patterns matched against symbol names. Matching symbols get no
+    label.
+
+symbols.test_buffers                        *angular-refs-config-test_buffers*
+    Type: `boolean`, Default: `false`
+    Show labels in test files as well.
+
+clients.angular                                  *angular-refs-config-clients*
+clients.typescript
+    Type: `string[]`
+    Names of the language server clients to use, in order of preference.
+    The first one attached to the buffer is used.
+
+debug                                              *angular-refs-config-debug*
+    Type: `boolean`, Default: `false`
+    Report the duration of every refresh and every failed refresh with
+    |vim.notify()|.
+
+==============================================================================
+6. SCOPE                                                  *angular-refs-scope*
+
+Only usages in your own source code are counted. A usage counts when the
+file it is in
+
+- lies inside the project root reported by the Angular language server,
+- has no `node_modules` or `.angular` directory in its path,
+- is not a declaration file (`.d.ts`),
+- is not inside the `dist`, `out-tsc` or `coverage` directory at the root of
+  the project,
+- does not match a pattern in `scope.exclude`.
+
+Usages outside this scope are not counted, but they are not forgotten
+either. A member that is only used by code outside the scope, for example
+because it implements an interface from a library, is labelled
+`implements` rather than `unused`.
+
+==============================================================================
+7. COMMANDS                                            *angular-refs-commands*
+
+                                                         *:AngularRefsRefresh*
+:AngularRefsRefresh
+    Count the usages in the current buffer again.
+
+                                                          *:AngularRefsToggle*
+:AngularRefsToggle
+    Hide or show all labels.
+
+                                                          *:AngularRefsUnused*
+:AngularRefsUnused
+    Open the |quickfix| list with every symbol of the current buffer that is
+    labelled `unused` or `tests only`.
+
+==============================================================================
+8. HIGHLIGHT GROUPS                                  *angular-refs-highlights*
+
+All groups link to `Comment` unless your color scheme or configuration
+defines them.
+
+                                                        *hl-AngularRefsCount*
+AngularRefsCount
+    Usage counts.
+
+                                                    *hl-AngularRefsFramework*
+AngularRefsFramework
+    The `lifecycle`, `host listener`, `host binding` and `implements`
+    labels.
+
+                                                    *hl-AngularRefsTestsOnly*
+AngularRefsTestsOnly
+    The `tests only` label.
+
+                                                       *hl-AngularRefsUnused*
+AngularRefsUnused
+    The `unused` label.
+
+To make unused code stand out: >lua
+
+    vim.api.nvim_set_hl(0, "AngularRefsUnused", { link = "DiagnosticWarn" })
+<
+==============================================================================
+9. HEALTH CHECK AND DEBUGGING                            *angular-refs-health*
+
+Run `:checkhealth angular-refs` in an Angular TypeScript buffer. It reports
+the attached language servers, the project root, the Angular version and
+whether the project has finished loading. It also points out deprecated
+options and a missing `typeCheckHostBindings` setting on Angular 20.
+
+The first labels appear once the Angular language server has loaded the
+project. In a large project this takes a few seconds after Neovim starts.
+Later refreshes are much faster. Set `debug = true` to see how long each
+refresh takes.
+
+==============================================================================
+10. LIMITATIONS                                     *angular-refs-limitations*
+
+- Members decorated with `@HostListener` or `@HostBinding` cannot be counted,
+  because the Angular language server reports no usages for them. They are
+  labelled `host listener` or `host binding` unless other code uses them.
+- On Angular 20 without `typeCheckHostBindings`, usages in `host: {}`
+  metadata are missing.
+- Labels are refreshed after an edit, not during it. While you type, a
+  label keeps its last value.
+
+ vim:tw=78:ts=8:et:ft=help:norl:
