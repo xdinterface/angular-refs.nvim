@@ -1,10 +1,9 @@
 local M = {}
 
 local clients = require("angular-refs.clients")
+local documents = require("angular-refs.documents")
 local scope = require("angular-refs.scope")
 local tags = require("angular-refs.tags")
-
-local MAX_TEMPLATE_BYTES = 1024 * 1024
 
 ---@class AngularRefsContext
 ---@field bufnr integer
@@ -14,6 +13,8 @@ local MAX_TEMPLATE_BYTES = 1024 * 1024
 ---@field ng table Angular language client
 ---@field ts table TypeScript language client
 ---@field batch AngularRefsBatch
+
+---@alias AngularRefsTarget {uri: string, line: integer, character: integer}
 
 ---Definition results per reference location, with the location's file for invalidation
 ---@type table<string, {uri: string, targets: AngularRefsTarget[]}>
@@ -47,8 +48,6 @@ local function location_key(location)
   return location.uri .. ":" .. start.line .. ":" .. start.character
 end
 
----@alias AngularRefsTarget {uri: string, line: integer, character: integer}
-
 ---@param result table|table[]|nil Location | Location[] | LocationLink[]
 ---@return AngularRefsTarget[]
 local function normalize_definitions(result)
@@ -73,37 +72,6 @@ local function position_params(uri, position)
   return { textDocument = { uri = uri }, position = position }
 end
 
----Text of a file: from its loaded buffer when there is one, otherwise read asynchronously from disk
----@param path string
----@param callback fun(text: string|nil)
-local function read_text(path, callback)
-  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf) == path then
-      callback(table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n"))
-      return
-    end
-  end
-
-  local done = vim.schedule_wrap(callback)
-  vim.uv.fs_open(path, "r", 438, function(open_err, fd)
-    if open_err or not fd then
-      done(nil)
-      return
-    end
-    vim.uv.fs_fstat(fd, function(stat_err, stat)
-      if stat_err or not stat or stat.size > MAX_TEMPLATE_BYTES then
-        vim.uv.fs_close(fd)
-        done(nil)
-        return
-      end
-      vim.uv.fs_read(fd, stat.size, 0, function(read_err, data)
-        vim.uv.fs_close(fd)
-        done(not read_err and data or nil)
-      end)
-    end)
-  end)
-end
-
 ---@param text string
 ---@param position {line: integer, character: integer}
 ---@param encoding string|nil
@@ -120,66 +88,6 @@ local function byte_offset(text, position, encoding)
   end
   local line_end = text:find("\n", offset, true) or (#text + 1)
   return offset + clients.byte_col(text:sub(offset, line_end - 1), position.character, encoding)
-end
-
----Documents opened on a TypeScript server for definition requests, shared by concurrent collects
----@type table<string, {client: table, uri: string, path: string, users: integer, ready: boolean, waiters: fun(ok: boolean)[]}>
-local opened_documents = {}
-
----Language servers only resolve definitions in documents the editor opened, so a .ts file
----without a buffer is opened on the TypeScript server until its last user releases it
----@param client table
----@param uri string
----@param on_ready fun(ok: boolean)
-local function acquire_document(client, uri, on_ready)
-  local key = client.id .. " " .. uri
-  local document = opened_documents[key]
-  if document then
-    document.users = document.users + 1
-    if document.ready then
-      on_ready(true)
-    else
-      table.insert(document.waiters, on_ready)
-    end
-    return
-  end
-
-  document = { client = client, uri = uri, path = vim.uri_to_fname(uri), users = 1, ready = false, waiters = { on_ready } }
-  opened_documents[key] = document
-  read_text(document.path, function(text)
-    local still_wanted = opened_documents[key] == document
-    if text and still_wanted then
-      clients.notify(client, "textDocument/didOpen", {
-        textDocument = { uri = uri, languageId = "typescript", version = 0, text = text },
-      })
-      document.ready = true
-    elseif still_wanted then
-      opened_documents[key] = nil
-    end
-    local waiters = document.waiters
-    document.waiters = {}
-    for _, waiter in ipairs(waiters) do
-      waiter(text ~= nil and still_wanted)
-    end
-  end)
-end
-
----@param client table
----@param uri string
-local function release_document(client, uri)
-  local key = client.id .. " " .. uri
-  local document = opened_documents[key]
-  if not document then
-    return
-  end
-  document.users = document.users - 1
-  if document.users > 0 then
-    return
-  end
-  opened_documents[key] = nil
-  if document.ready and not clients.has_document(client, document.path) then
-    clients.notify(client, "textDocument/didClose", { textDocument = { uri = uri } })
-  end
 end
 
 ---@param a {line: integer, character: integer}
@@ -221,7 +129,7 @@ local function read_elements(candidates, encoding, on_elements)
     return
   end
   for _, location in ipairs(candidates) do
-    read_text(vim.uri_to_fname(location.uri), function(text)
+    documents.read_text(vim.uri_to_fname(location.uri), function(text)
       if failed then
         return
       end
@@ -259,26 +167,12 @@ function M.collect(ctx, symbols, callback)
   local remaining = #symbols
   local finished = false
 
-  -- Documents this collect acquired on the TypeScript server, released when it ends
-  ---@type table<string, true>
-  local acquired = {}
-  local release_timer
-
-  local function release_documents()
-    if release_timer and not release_timer:is_closing() then
-      release_timer:stop()
-      release_timer:close()
-    end
-    for uri in pairs(acquired) do
-      release_document(ctx.ts, uri)
-    end
-    acquired = {}
-  end
+  local opened = documents.session(ctx.ts)
 
   local function finish_with(value)
     if not finished then
       finished = true
-      release_documents()
+      opened:release_all()
       callback(value)
     end
   end
@@ -313,31 +207,6 @@ function M.collect(ctx, symbols, callback)
     ctx.batch:request(client, method, params, ctx.bufnr, callback_fn)
   end
 
-  ---@param uri string
-  ---@param on_ready fun(ok: boolean)
-  local function ensure_document(uri, on_ready)
-    if clients.has_document(ctx.ts, vim.uri_to_fname(uri)) then
-      on_ready(true)
-      return
-    end
-    if not acquired[uri] then
-      acquired[uri] = true
-      if not release_timer then
-        -- A superseded collect never finishes; still release the documents it acquired
-        release_timer = vim.defer_fn(release_documents, 30000)
-      end
-      acquire_document(ctx.ts, uri, on_ready)
-      return
-    end
-    -- Already acquired by this collect: wait until it is open
-    local document = opened_documents[ctx.ts.id .. " " .. uri]
-    if document and not document.ready then
-      table.insert(document.waiters, on_ready)
-    else
-      on_ready(document ~= nil)
-    end
-  end
-
   ---@param location table
   ---@param on_targets fun(targets: AngularRefsTarget[]|nil)
   local function definitions(location, on_targets)
@@ -366,7 +235,7 @@ function M.collect(ctx, symbols, callback)
       ask_angular()
       return
     end
-    ensure_document(location.uri, function(ok)
+    opened:ensure(location.uri, function(ok)
       if not ok then
         on_targets(nil)
         return
@@ -431,12 +300,12 @@ function M.collect(ctx, symbols, callback)
     end
   end
 
-  ---@type table<string, {tags: {uri: string, line: integer, last_line: integer, tag: string}[]|nil, waiters: function[]}>
+  ---@type table<string, {tags: AngularRefsElement[]|nil, waiters: function[]|nil}>
   local element_cache = {}
 
   ---Opening tags of template elements using the symbol's class, via angularls class references
   ---@param symbol AngularRefsSymbol
-  ---@param on_elements fun(elements: {uri: string, line: integer, last_line: integer, tag: string}[]|nil)
+  ---@param on_elements fun(elements: AngularRefsElement[]|nil)
   local function class_elements(symbol, on_elements)
     local entry = element_cache[symbol.container]
     if entry then
