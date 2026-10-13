@@ -115,6 +115,12 @@ function M.run(bufnr)
   end
   local root = clients.root(ng)
   local path = vim.api.nvim_buf_get_name(bufnr)
+  if not scope.gitignore_resolved(path) then
+    scope.prefetch_gitignore({ path }, function()
+      M.run(bufnr)
+    end)
+    return
+  end
   if not scope.in_scope(path, root) then
     return
   end

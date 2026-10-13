@@ -189,6 +189,48 @@ local function on_own_declaration(symbol, location, uri)
   return not position_before(start, decl_start) and position_before(start, name)
 end
 
+---@alias AngularRefsElement {uri: string, line: integer, last_line: integer, tag: string}
+
+---Opening tags of the template elements among a class's reference locations
+---@param candidates table[] In-scope reference locations of the class
+---@param encoding string|nil Offset encoding of the locations
+---@param on_elements fun(elements: AngularRefsElement[]|nil) nil when a file cannot be read
+local function read_elements(candidates, encoding, on_elements)
+  local pending, elements, failed = #candidates, {}, false
+  if pending == 0 then
+    on_elements(elements)
+    return
+  end
+  for _, location in ipairs(candidates) do
+    read_text(vim.uri_to_fname(location.uri), function(text)
+      if failed then
+        return
+      end
+      if not text then
+        failed = true
+        on_elements(nil)
+        return
+      end
+      local offset = byte_offset(text, location.range.start, encoding)
+      local is_element = offset and (text:sub(offset, offset) == "<" or text:sub(offset - 1, offset - 1) == "<")
+      local tag = is_element and tags.opening_tag(text, offset)
+      if tag then
+        local _, newlines = tag:gsub("\n", "")
+        table.insert(elements, {
+          uri = location.uri,
+          line = location.range.start.line,
+          last_line = location.range.start.line + newlines,
+          tag = tag,
+        })
+      end
+      pending = pending - 1
+      if pending == 0 then
+        on_elements(elements)
+      end
+    end)
+  end
+end
+
 ---Collect exact usage counts for every symbol of one buffer
 ---@param ctx AngularRefsContext
 ---@param symbols AngularRefsSymbol[]
@@ -403,42 +445,15 @@ function M.collect(ctx, symbols, callback)
         resolve(nil)
         return
       end
-      local candidates = vim.tbl_filter(function(location)
-        return scope.in_scope(vim.uri_to_fname(location.uri), ctx.root)
+      local paths = vim.tbl_map(function(location)
+        return vim.uri_to_fname(location.uri)
       end, result)
-      local pending, elements, failed = #candidates, {}, false
-      if pending == 0 then
-        resolve(elements)
-        return
-      end
-      for _, location in ipairs(candidates) do
-        read_text(vim.uri_to_fname(location.uri), function(text)
-          if failed then
-            return
-          end
-          if not text then
-            failed = true
-            resolve(nil)
-            return
-          end
-          local offset = byte_offset(text, location.range.start, ctx.ng.offset_encoding)
-          local is_element = offset and (text:sub(offset, offset) == "<" or text:sub(offset - 1, offset - 1) == "<")
-          local tag = is_element and tags.opening_tag(text, offset)
-          if tag then
-            local _, newlines = tag:gsub("\n", "")
-            table.insert(elements, {
-              uri = location.uri,
-              line = location.range.start.line,
-              last_line = location.range.start.line + newlines,
-              tag = tag,
-            })
-          end
-          pending = pending - 1
-          if pending == 0 then
-            resolve(elements)
-          end
-        end)
-      end
+      scope.prefetch_gitignore(paths, function()
+        local candidates = vim.tbl_filter(function(location)
+          return scope.in_scope(vim.uri_to_fname(location.uri), ctx.root)
+        end, result)
+        read_elements(candidates, ctx.ng.offset_encoding, resolve)
+      end)
     end)
   end
 
@@ -477,14 +492,8 @@ function M.collect(ctx, symbols, callback)
   ---@param index integer
   ---@param symbol AngularRefsSymbol
   ---@param locations table[]
-  local function process(index, symbol, locations)
+  local function process(index, symbol, locations, paths)
     local in_scope, out_of_scope = {}, 0
-    local paths = {}
-    for _, location in ipairs(locations) do
-      table.insert(paths, vim.uri_to_fname(location.uri))
-    end
-    scope.prefetch_gitignore(paths)
-
     for i, location in ipairs(locations) do
       if not on_own_declaration(symbol, location, ctx.uri) then
         if scope.in_scope(paths[i], ctx.root) then
@@ -549,7 +558,15 @@ function M.collect(ctx, symbols, callback)
         fail()
         return
       end
-      process(index, symbol, result)
+      local paths = {}
+      for _, location in ipairs(result) do
+        table.insert(paths, vim.uri_to_fname(location.uri))
+      end
+      scope.prefetch_gitignore(paths, function()
+        if not finished then
+          process(index, symbol, result, paths)
+        end
+      end)
     end)
   end
 end

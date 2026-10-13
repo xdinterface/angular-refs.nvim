@@ -112,22 +112,87 @@ describe('angular-refs.scope', function()
       vim.fn.system = original_fn_system
     end)
 
+    local repo = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h:h:h')
+
+    ---Prefetch and wait for the callback
+    local function prefetch(paths)
+      local done = false
+      scope.prefetch_gitignore(paths, function()
+        done = true
+      end)
+      vim.wait(5000, function()
+        return done
+      end, 10)
+      assert.is_true(done, 'prefetch never called back')
+    end
+
     it('never starts a process when disabled', function()
-      scope.prefetch_gitignore({ '/w/app/src/a.ts', '/w/app/src/b.ts' })
+      prefetch({ '/w/app/src/a.ts', '/w/app/src/b.ts' })
       scope.in_scope('/w/app/src/a.ts', root)
       assert.equals(0, spawned)
     end)
 
-    it('excludes gitignored files when enabled', function()
-      local repo = vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':h:h:h')
+    it('excludes gitignored files when enabled, with one git process', function()
       config.setup({ scope = { respect_gitignore = true } })
-      local ignored = repo .. '/foo.log'
-      local tracked = repo .. '/README.md'
-      scope.prefetch_gitignore({ ignored, tracked })
+      local ignored, tracked = repo .. '/foo.log', repo .. '/README.md'
+      prefetch({ ignored, tracked })
       assert.equals(1, spawned)
       assert.is_false(scope.in_scope(ignored, repo))
       assert.is_true(scope.in_scope(tracked, repo))
       assert.equals(1, spawned)
+    end)
+
+    it('answers through the callback instead of waiting for git', function()
+      config.setup({ scope = { respect_gitignore = true } })
+      local called = false
+      scope.prefetch_gitignore({ repo .. '/foo.log' }, function()
+        called = true
+      end)
+      assert.is_false(called)
+      vim.wait(5000, function()
+        return called
+      end, 10)
+      assert.is_true(called)
+    end)
+
+    it('shares one git process between concurrent requests for the same files', function()
+      config.setup({ scope = { respect_gitignore = true } })
+      local paths = { repo .. '/foo.log', repo .. '/README.md' }
+      local done = 0
+      for _ = 1, 3 do
+        scope.prefetch_gitignore(paths, function()
+          done = done + 1
+        end)
+      end
+      vim.wait(5000, function()
+        return done == 3
+      end, 10)
+      assert.equals(3, done)
+      assert.equals(1, spawned)
+    end)
+
+    it('checks files one by one when git rejects the batch', function()
+      config.setup({ scope = { respect_gitignore = true } })
+      local outside = vim.fn.tempname() .. '/a.ts'
+      prefetch({ repo .. '/foo.log', outside })
+      assert.is_false(scope.in_scope(repo .. '/foo.log', repo))
+      assert.equals(3, spawned)
+    end)
+
+    it('treats files as not ignored when git cannot run', function()
+      config.setup({ scope = { respect_gitignore = true } })
+      vim.system = function()
+        spawned = spawned + 1
+        error('ENOENT: no such file or directory (cmd): git')
+      end
+      prefetch({ repo .. '/foo.log' })
+      assert.is_true(scope.in_scope(repo .. '/foo.log', repo))
+    end)
+
+    it('never starts a process from in_scope itself', function()
+      config.setup({ scope = { respect_gitignore = true } })
+      assert.is_true(scope.in_scope(repo .. '/unknown.log', repo))
+      assert.equals(0, spawned)
     end)
   end)
 end)

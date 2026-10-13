@@ -142,6 +142,16 @@ describe('angular-refs.refresh', function()
     assert.equals(3, #stub.fetches)
   end)
 
+  it('checks whether its own file is gitignored in the background before counting', function()
+    config.setup({ scope = { respect_gitignore = true } })
+    refresh.run(buf)
+    assert.equals(0, #stub.fetches)
+    vim.wait(5000, function()
+      return #stub.fetches == 1
+    end, 20)
+    assert.equals(1, #stub.fetches)
+  end)
+
   it('does not render results for text that changed while counting, and counts again', function()
     refresh.run(buf)
     stub.fetches[1].callback({ symbol('a', 1) })
