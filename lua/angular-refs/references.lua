@@ -15,12 +15,29 @@ local MAX_TEMPLATE_BYTES = 1024 * 1024
 ---@field ts table TypeScript language client
 ---@field batch AngularRefsBatch
 
----@type table<string, table[]>
+---Definition results per reference location, with the location's file for invalidation
+---@type table<string, {uri: string, targets: AngularRefsTarget[]}>
 local definition_cache = {}
 
----Forget cached definition results (call when any project file changed)
+---Forget every cached definition result
 function M.reset_cache()
   definition_cache = {}
+end
+
+---Forget the definition results an edit of one file can change: those of locations in the
+---file, whose positions move, and those pointing into it, whose target lines move
+---@param path string
+function M.invalidate_file(path)
+  local uri = vim.uri_from_fname(path)
+  for key, entry in pairs(definition_cache) do
+    local stale = entry.uri == uri
+    for _, target in ipairs(entry.targets) do
+      stale = stale or target.uri == uri
+    end
+    if stale then
+      definition_cache[key] = nil
+    end
+  end
 end
 
 ---@param location table
@@ -326,12 +343,12 @@ function M.collect(ctx, symbols, callback)
   local function definitions(location, on_targets)
     local cache_key = location_key(location)
     if definition_cache[cache_key] then
-      on_targets(definition_cache[cache_key])
+      on_targets(definition_cache[cache_key].targets)
       return
     end
 
     local function store(targets)
-      definition_cache[cache_key] = targets
+      definition_cache[cache_key] = { uri = location.uri, targets = targets }
       on_targets(targets)
     end
 

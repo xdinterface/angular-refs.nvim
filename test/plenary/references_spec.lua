@@ -209,6 +209,49 @@ describe('angular-refs.references', function()
     assert.same({ prod = 1, test = 0, related = true }, results[1])
   end)
 
+  describe('definition cache', function()
+    local child, use, other = '/w/app/src/child.ts', '/w/app/src/use.ts', '/w/app/src/other.ts'
+
+    local function fakes()
+      local ng = fake_client('angularls', {
+        [key(REFS, comp, 10, 2)] = { loc(child, 5, 11), loc(use, 8, 4), loc(other, 2, 4) },
+      })
+      local ts = fake_client('ts_ls', {
+        [key(DEF, child, 5, 11)] = { loc(child, 5, 11) },
+        [key(DEF, use, 8, 4)] = { loc(comp, 10, 2) },
+        [key(DEF, other, 2, 4)] = { loc(child, 1, 2) },
+      })
+      return ng, ts
+    end
+
+    ---Definition requests of the second collect, after `between` ran
+    local function requests_after(between)
+      local ng, ts = fakes()
+      collect(context(ng, ts), { symbol() })
+      ts.calls = {}
+      between()
+      assert.same({ prod = 1, test = 0, related = true }, collect(context(ng, ts), { symbol() })[1])
+      table.sort(ts.calls)
+      return ts.calls
+    end
+
+    it('answers repeated refreshes from the cache', function()
+      assert.same({}, requests_after(function() end))
+    end)
+
+    it('forgets only definitions involving an edited file', function()
+      local calls = requests_after(function()
+        references.invalidate_file(child)
+      end)
+      -- child.ts: the usage located there, and the usage in other.ts that resolves into it
+      assert.same({ key(DEF, child, 5, 11), key(DEF, other, 2, 4) }, calls)
+    end)
+
+    it('forgets everything on a full reset', function()
+      assert.equals(3, #requests_after(references.reset_cache))
+    end)
+  end)
+
   it('never filters top-level functions', function()
     local ng = fake_client('angularls', {
       [key(REFS, comp, 10, 2)] = { loc('/w/app/src/use.ts', 8, 4), loc('/w/app/src/other.ts', 2, 4) },

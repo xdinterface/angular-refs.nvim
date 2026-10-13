@@ -28,6 +28,24 @@ describe('angular-refs setup', function()
     assert.is_nil(events.CursorHold)
   end)
 
+  it('invalidates only the edited file while typing and everything on save', function()
+    angular_refs.setup()
+    local refresh = require('angular-refs.refresh')
+    local original = refresh.bump_generation
+    local calls = {}
+    refresh.bump_generation = function(path)
+      table.insert(calls, path or 'all')
+    end
+    local buf = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_name(buf, '/w/app/src/edited.component.ts')
+    vim.api.nvim_exec_autocmds('TextChanged', { buffer = buf })
+    vim.api.nvim_exec_autocmds('TextChangedI', { buffer = buf })
+    vim.api.nvim_exec_autocmds('BufWritePost', { buffer = buf })
+    refresh.bump_generation = original
+    vim.api.nvim_buf_delete(buf, { force = true })
+    assert.same({ '/w/app/src/edited.component.ts', '/w/app/src/edited.component.ts', 'all' }, calls)
+  end)
+
   it('defines highlight groups', function()
     angular_refs.setup()
     assert.equals('Comment', vim.api.nvim_get_hl(0, { name = 'AngularRefsCount' }).link)

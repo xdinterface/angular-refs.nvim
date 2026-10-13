@@ -240,9 +240,14 @@ function M.schedule_visible()
 end
 
 ---Mark every buffer stale because a project file may have changed
-function M.bump_generation()
+---@param path string|nil The edited file; nil when any file may have changed
+function M.bump_generation(path)
   generation = generation + 1
-  references.reset_cache()
+  if path then
+    references.invalidate_file(path)
+  else
+    references.reset_cache()
+  end
 end
 
 ---@param bufnr integer

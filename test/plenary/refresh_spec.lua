@@ -12,6 +12,8 @@ local function install_stubs()
   stub.batches = {}
   stub.fetches = {}
   stub.collects = {}
+  stub.resets = 0
+  stub.invalidated = {}
 
   package.loaded['angular-refs.clients'] = {
     angular = function()
@@ -44,7 +46,12 @@ local function install_stubs()
     collect = function(ctx, list, callback)
       table.insert(stub.collects, { ctx = ctx, symbols = list, callback = callback })
     end,
-    reset_cache = function() end,
+    reset_cache = function()
+      stub.resets = stub.resets + 1
+    end,
+    invalidate_file = function(path)
+      table.insert(stub.invalidated, path)
+    end,
   }
   package.loaded['angular-refs.refresh'] = nil
   return require('angular-refs.refresh')
@@ -126,6 +133,17 @@ describe('angular-refs.refresh', function()
     assert.is_true(refresh.is_fresh(buf))
     refresh.bump_generation()
     assert.is_false(refresh.is_fresh(buf))
+  end)
+
+  it('invalidates one file after an edit and everything without a file', function()
+    refresh.run(buf)
+    answer({ symbol('a', 1) }, { { prod = 1, test = 0, related = false } })
+    refresh.bump_generation('/w/app/src/other.ts')
+    assert.is_false(refresh.is_fresh(buf))
+    assert.same({ '/w/app/src/other.ts' }, stub.invalidated)
+    assert.equals(0, stub.resets)
+    refresh.bump_generation()
+    assert.equals(1, stub.resets)
   end)
 
   it('keeps previous labels when a refresh fails and retries', function()

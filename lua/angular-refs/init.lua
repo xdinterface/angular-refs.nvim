@@ -77,8 +77,19 @@ function M.setup(opts)
     end,
   })
 
-  -- Any edit or save can change counts shown in other buffers, e.g. a template using a member
-  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufWritePost" }, {
+  -- Any edit or save can change counts shown in other buffers, e.g. a template using a member.
+  -- Typing only invalidates what involves the edited file; a save starts from scratch, so a
+  -- definition another file's edit redirected is never stale for longer than until the save.
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+    group = group,
+    pattern = { "*.ts", "*.html" },
+    callback = function(args)
+      refresh.bump_generation(vim.api.nvim_buf_get_name(args.buf))
+      refresh.schedule_visible()
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
     pattern = { "*.ts", "*.html" },
     callback = function()
