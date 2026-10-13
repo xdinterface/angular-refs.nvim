@@ -53,18 +53,48 @@ function M.open(relative)
   return bufnr
 end
 
----Refresh a buffer through the plugin and wait for labels
+---Wait until the plugin has labelled the buffer's current text on its own
 ---@param bufnr integer
-function M.refresh(bufnr)
+function M.wait_fresh(bufnr)
   local refresh = require('angular-refs.refresh')
-  refresh.bump_generation()
-  refresh.run(bufnr)
   assert(
     vim.wait(TIMEOUT_MS, function()
       return refresh.is_fresh(bufnr)
     end, 50),
     'labels never rendered for ' .. vim.api.nvim_buf_get_name(bufnr)
   )
+end
+
+---Refresh a buffer through the plugin and wait for labels
+---@param bufnr integer
+function M.refresh(bufnr)
+  local refresh = require('angular-refs.refresh')
+  refresh.bump_generation()
+  refresh.run(bufnr)
+  M.wait_fresh(bufnr)
+end
+
+---Replace lines like an edit in the editor would, including the autocommand it fires
+---@param bufnr integer
+---@param first integer 0-based
+---@param last integer 0-based, exclusive
+---@param lines string[]
+function M.edit(bufnr, first, last, lines)
+  vim.api.nvim_buf_set_lines(bufnr, first, last, false, lines)
+  vim.api.nvim_exec_autocmds('TextChanged', { buffer = bufnr })
+end
+
+---0-based index of the first line containing `text`
+---@param bufnr integer
+---@param text string
+---@return integer
+function M.line_of(bufnr, text)
+  for index, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+    if line:find(text, 1, true) then
+      return index - 1
+    end
+  end
+  error('no line contains ' .. text)
 end
 
 ---@param bufnr integer
