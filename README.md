@@ -34,7 +34,7 @@ The plugin adds three things the language server does not do on its own.
    `ngOnInit` does not.
 2. Parent bindings of `@Input({ transform })` inputs are found. The language server
    misses them, so the plugin reads the opening tag of the elements it reports and
-   matches the binding name exactly (`[x]`, `x="..."`, `x`, `bind-x`, `[(x)]` and
+   matches the binding name exactly (`[x]`, `x="..."`, `x`, `bind-x`, `[(x)]`, `*x` and
    aliases).
 3. Only usages in your own source code are counted. Dependencies, build output and
    declaration files are ignored (see [Scope](#scope)).
