@@ -2,6 +2,9 @@ local M = {}
 
 local config = require("angular-refs.config")
 
+-- Neovim 0.11 changed client methods to the method-call form and str_byteindex's signature
+local HAS_NVIM_0_11 = vim.fn.has("nvim-0.11") == 1
+
 local LOADING_START = "angular/projectLoadingStart"
 local LOADING_FINISH = "angular/projectLoadingFinish"
 
@@ -60,7 +63,7 @@ end
 ---Neovim 0.11+ expects method-call syntax; the dot form is deprecated and removed in 0.13
 ---@return boolean ok, integer|nil request_id
 function M.request(client, method, params, handler, bufnr)
-  if vim.fn.has("nvim-0.11") == 1 then
+  if HAS_NVIM_0_11 then
     return client:request(method, params, handler, bufnr)
   end
   return client.request(method, params, handler, bufnr)
@@ -72,7 +75,7 @@ end
 ---@param params table
 ---@return boolean
 function M.notify(client, method, params)
-  if vim.fn.has("nvim-0.11") == 1 then
+  if HAS_NVIM_0_11 then
     return client:notify(method, params)
   end
   return client.notify(method, params)
@@ -102,7 +105,7 @@ function M.byte_col(line, character, encoding)
     return math.min(character, #line)
   end
   local ok, col
-  if vim.fn.has("nvim-0.11") == 1 then
+  if HAS_NVIM_0_11 then
     ok, col = pcall(vim.str_byteindex, line, encoding, character, false)
   else
     ok, col = pcall(vim.str_byteindex, line, character, encoding == "utf-16")
@@ -113,7 +116,7 @@ end
 ---@param client table
 ---@param request_id integer
 local function cancel_request(client, request_id)
-  if vim.fn.has("nvim-0.11") == 1 then
+  if HAS_NVIM_0_11 then
     client:cancel_request(request_id)
   else
     client.cancel_request(request_id)
@@ -161,7 +164,9 @@ end
 ---@class AngularRefsBatch
 ---@field limit integer
 ---@field queue table[]
+---@field head integer Index of the next queued job
 ---@field in_flight table<table, {client: table, id: integer}>
+---@field in_flight_count integer
 ---@field cancelled boolean
 local Batch = {}
 Batch.__index = Batch
@@ -170,25 +175,30 @@ Batch.__index = Batch
 ---@param limit integer
 ---@return AngularRefsBatch
 function M.new_batch(limit)
-  return setmetatable({ limit = limit, queue = {}, in_flight = {}, cancelled = false }, Batch)
+  return setmetatable({ limit = limit, queue = {}, head = 1, in_flight = {}, in_flight_count = 0, cancelled = false }, Batch)
 end
 
 function Batch:_pump()
-  while not self.cancelled and vim.tbl_count(self.in_flight) < self.limit and #self.queue > 0 do
-    local job = table.remove(self.queue, 1)
+  while not self.cancelled and self.in_flight_count < self.limit and self.head <= #self.queue do
+    local job = self.queue[self.head]
+    self.queue[self.head] = false
+    self.head = self.head + 1
     local token = {}
     self.in_flight[token] = { client = job.client }
+    self.in_flight_count = self.in_flight_count + 1
     local ok, request_id = M.request(job.client, job.method, job.params, function(err, result)
       if self.cancelled or not self.in_flight[token] then
         return
       end
       self.in_flight[token] = nil
+      self.in_flight_count = self.in_flight_count - 1
       job.callback(err, result)
       self:_pump()
     end, job.bufnr)
 
     if not ok then
       self.in_flight[token] = nil
+      self.in_flight_count = self.in_flight_count - 1
       job.callback({ message = "request could not be sent: " .. job.method }, nil)
     elseif self.in_flight[token] then
       self.in_flight[token].id = request_id
@@ -211,13 +221,13 @@ end
 
 function Batch:cancel()
   self.cancelled = true
-  self.queue = {}
+  self.queue, self.head = {}, 1
   for _, entry in pairs(self.in_flight) do
     if entry.id then
       cancel_request(entry.client, entry.id)
     end
   end
-  self.in_flight = {}
+  self.in_flight, self.in_flight_count = {}, 0
 end
 
 return M
